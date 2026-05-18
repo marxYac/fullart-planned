@@ -23,10 +23,12 @@ import {
   Droplet,
   Flame,
   Zap,
-  Crown
+  Crown,
+  LayoutDashboard
 } from "lucide-react";
+
 import { ModeToggle } from "@/components/mode-toggle";
-import { MobileMenu } from "@/components/mobile-menu";
+
 import { useEffect } from "react";
 import { 
   getServices, 
@@ -74,7 +76,9 @@ const serviceIcons: Record<string, React.ReactNode> = {
 
 
 export default function BookAppointmentPage() {
-  const { isSignedIn, isLoaded } = useUser();
+  const { isSignedIn, isLoaded, user } = useUser();
+  const role = user?.publicMetadata?.role as string | undefined;
+  const canAccessDashboard = role === "admin" || role === "super_user" || role === "operator";
   const [view, setView] = useState("booking"); // "booking" or "appointments"
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,6 +87,7 @@ export default function BookAppointmentPage() {
   const [dbAppointments, setDbAppointments] = useState<any[]>([]);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [activePeriod, setActivePeriod] = useState<"morning" | "afternoon" | "evening">("morning");
   
   const [bookingData, setBookingData] = useState<{
     service: any;
@@ -110,6 +115,15 @@ export default function BookAppointmentPage() {
     }
     loadData();
   }, [view]);
+
+  // Gestione deep-linking dei parametri URL per mobile bottom tab bar
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewParam = params.get("view");
+    if (viewParam === "appointments") {
+      setView("appointments");
+    }
+  }, []);
 
 
   // Calendar logic
@@ -210,16 +224,20 @@ export default function BookAppointmentPage() {
           <div className="hidden lg:flex items-center gap-8 text-sm font-medium">
             <Link href="/#servizi" className="hover:text-brand transition-colors">Servizi</Link>
             <Link href="/wellness" className="hover:text-brand transition-colors">Wellness</Link>
-            <Link href="/shop" className="hover:text-brand transition-colors">Shop</Link>
+            <Link href="/products" className="hover:text-brand transition-colors">Products</Link>
+            {canAccessDashboard && (
+              <Link href="/admin" className="hover:text-brand transition-colors font-bold text-brand">Dashboard</Link>
+            )}
           </div>
 
           <div className="nav-actions">
+            <ModeToggle />
             {isLoaded && !isSignedIn && (
               <SignInButton mode="redirect">
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="hidden sm:flex hover:bg-brand/10 hover:text-brand transition-all font-semibold"
+                  className="flex hover:bg-brand/10 hover:text-brand transition-all font-semibold"
                 >
                   ACCEDI
                 </Button>
@@ -234,8 +252,19 @@ export default function BookAppointmentPage() {
                 }}
               />
             )}
-            <ModeToggle />
-            <MobileMenu />
+
+            {isLoaded && isSignedIn && canAccessDashboard && (
+              <Link href="/admin">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-brand hover:bg-brand/10 rounded-xl"
+                  aria-label="Accedi alla Dashboard"
+                >
+                  <LayoutDashboard className="w-5 h-5" />
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </nav>
@@ -488,7 +517,7 @@ export default function BookAppointmentPage() {
                         animate="animate"
                         exit="exit"
                         variants={fadeInUp}
-                        className="glass-effect p-8 rounded-[3rem] soft-shadow border border-brand/10 max-w-2xl mx-auto"
+                        className="glass-effect p-6 md:p-8 rounded-[3rem] soft-shadow border border-brand/10 max-w-2xl mx-auto"
                       >
                         <div className="text-center mb-8">
                           <p className="text-brand font-bold uppercase tracking-widest text-xs mb-2">Disponibilità per il</p>
@@ -497,51 +526,89 @@ export default function BookAppointmentPage() {
                           </h3>
                         </div>
 
+                        {/* Period Selector Tabs */}
+                        <div className="flex gap-2 p-1.5 bg-muted/20 border border-brand/5 rounded-2xl mb-8">
+                          {[
+                            { id: "morning", label: "🌅 Mattina", desc: "08:30 - 12:30" },
+                            { id: "afternoon", label: "☀️ Pomeriggio", desc: "13:00 - 17:30" },
+                            { id: "evening", label: "🌙 Sera", desc: "18:00 - 19:30" }
+                          ].map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => setActivePeriod(p.id as any)}
+                              className={`flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all select-none cursor-pointer ${activePeriod === p.id ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'hover:bg-brand/5 text-muted-foreground'}`}
+                            >
+                              <span className="text-sm font-bold">{p.label}</span>
+                              <span className={`text-[9px] font-medium tracking-tight mt-0.5 ${activePeriod === p.id ? 'text-white/80' : 'text-muted-foreground/60'}`}>{p.desc}</span>
+                            </button>
+                          ))}
+                        </div>
+
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                           {isLoadingSlots ? (
-                            <div className="col-span-full text-center text-muted py-4 animate-pulse">
+                            <div className="col-span-full text-center text-muted py-8 animate-pulse">
                               Ricerca disponibilità in corso...
                             </div>
                           ) : (
-                            ['08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'].map((t) => {
-                              const serviceDuration = bookingData.service?.duration || 30;
-                              const [hours, minutes] = t.split(':').map(Number);
-                              const startTimeInMinutes = hours * 60 + minutes;
-                              const endTimeInMinutes = startTimeInMinutes + serviceDuration;
-                              const closingTimeInMinutes = 20 * 60; // 20:00
-                              
-                              // Check if service exceeds closing time
-                              const exceedsClosing = endTimeInMinutes > closingTimeInMinutes;
-                              
-                              // Check if any required 30-min slot is already booked
-                              const slotsNeeded = Math.ceil(serviceDuration / 30);
-                              let isBooked = false;
-                              
-                              for (let i = 0; i < slotsNeeded; i++) {
-                                const checkTimeInMins = startTimeInMinutes + i * 30;
-                                const h = Math.floor(checkTimeInMins / 60).toString().padStart(2, '0');
-                                const m = (checkTimeInMins % 60).toString().padStart(2, '0');
-                                if (bookedSlots.includes(`${h}:${m}`)) {
-                                  isBooked = true;
-                                  break;
-                                }
+                            (() => {
+                              const allSlots = ['08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'];
+                              const filteredSlots = allSlots.filter((t) => {
+                                const [hours] = t.split(':').map(Number);
+                                if (activePeriod === "morning") return hours < 13;
+                                if (activePeriod === "afternoon") return hours >= 13 && hours < 18;
+                                if (activePeriod === "evening") return hours >= 18;
+                                return true;
+                              });
+
+                              if (filteredSlots.length === 0) {
+                                return (
+                                  <div className="col-span-full text-center text-muted py-8">
+                                    Nessun orario disponibile per questa fascia oraria.
+                                  </div>
+                                );
                               }
 
-                              const isDisabled = isSubmitting || isBooked || exceedsClosing;
+                              return filteredSlots.map((t) => {
+                                const serviceDuration = bookingData.service?.duration || 30;
+                                const [hours, minutes] = t.split(':').map(Number);
+                                const startTimeInMinutes = hours * 60 + minutes;
+                                const endTimeInMinutes = startTimeInMinutes + serviceDuration;
+                                const closingTimeInMinutes = 20 * 60; // 20:00
+                                
+                                // Check if service exceeds closing time
+                                const exceedsClosing = endTimeInMinutes > closingTimeInMinutes;
+                                
+                                // Check if any required 30-min slot is already booked
+                                const slotsNeeded = Math.ceil(serviceDuration / 30);
+                                let isBooked = false;
+                                
+                                for (let i = 0; i < slotsNeeded; i++) {
+                                  const checkTimeInMins = startTimeInMinutes + i * 30;
+                                  const h = Math.floor(checkTimeInMins / 60).toString().padStart(2, '0');
+                                  const m = (checkTimeInMins % 60).toString().padStart(2, '0');
+                                  if (bookedSlots.includes(`${h}:${m}`)) {
+                                    isBooked = true;
+                                    break;
+                                  }
+                                }
 
-                              return (
-                                <Button
-                                  key={t}
-                                  variant="outline"
-                                  disabled={isDisabled}
-                                  onClick={() => handleSelectTime(t)}
-                                  className={`rounded-2xl h-14 font-bold border-brand/10 transition-all ${isDisabled ? 'opacity-30 cursor-not-allowed bg-muted/10' : 'hover:border-brand hover:bg-brand/5 hover:text-brand'}`}
-                                >
-                                  <Clock className="w-4 h-4 mr-2 opacity-50" />
-                                  {t}
-                                </Button>
-                              );
-                            })
+                                const isDisabled = isSubmitting || isBooked || exceedsClosing;
+
+                                return (
+                                  <Button
+                                    key={t}
+                                    variant="outline"
+                                    disabled={isDisabled}
+                                    onClick={() => handleSelectTime(t)}
+                                    className={`rounded-2xl h-14 font-bold border-brand/10 transition-all ${isDisabled ? 'opacity-30 cursor-not-allowed bg-muted/10' : 'hover:border-brand hover:bg-brand/5 hover:text-brand'}`}
+                                  >
+                                    <Clock className="w-4 h-4 mr-1 md:mr-2 opacity-50 shrink-0" />
+                                    {t}
+                                  </Button>
+                                );
+                              });
+                            })()
                           )}
                         </div>
 
@@ -571,23 +638,90 @@ export default function BookAppointmentPage() {
                           Abbiamo ricevuto la tua richiesta. Riceverai un'email di conferma a breve.
                         </p>
 
-                        <div className="bg-brand/5 rounded-3xl p-8 mb-10 text-left border border-brand/10 space-y-4">
-                          <div className="flex justify-between items-center pb-4 border-b border-brand/10">
-                            <span className="text-muted text-sm uppercase tracking-widest font-bold">Servizio</span>
-                            <span className="font-bold text-lg">{bookingData.service?.name}</span>
-                          </div>
-                          <div className="flex justify-between items-center pb-4 border-b border-brand/10">
-                            <span className="text-muted text-sm uppercase tracking-widest font-bold">Barbiere</span>
-                            <span className="font-bold text-lg">{bookingData.operator?.name}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-muted text-sm uppercase tracking-widest font-bold">Data & Ora</span>
-                            <div className="text-right">
-                              <div className="font-bold text-lg">
-                                {bookingData.date?.toLocaleDateString('it-IT', { day: 'numeric', month: 'long' })}
-                              </div>
-                              <div className="text-brand font-black">ore {bookingData.time}</div>
+                        {/* Premium Digital Boarding Pass / Ticket */}
+                        <div className="max-w-md mx-auto bg-card border border-brand/10 rounded-[2.5rem] overflow-hidden soft-shadow text-left relative flex flex-col mb-10">
+                          {/* Ticket Header */}
+                          <div className="bg-brand text-white p-6 relative flex justify-between items-center overflow-hidden">
+                            {/* Decorative background gradients */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-brand to-brand-hover" />
+                            <div className="absolute -top-10 -right-10 w-24 h-24 bg-white/5 rounded-full blur-xl" />
+                            
+                            <div className="relative z-10">
+                              <span className="text-[9px] font-black uppercase tracking-[0.25em] text-white/70">FullArt Barber Spa</span>
+                              <h4 className="text-xl font-bold tracking-tight mt-0.5">Booking Pass</h4>
                             </div>
+                            <div className="relative z-10 bg-white/15 px-3 py-1.5 rounded-xl border border-white/10 text-center">
+                              <span className="block text-[8px] font-bold text-white/80 uppercase tracking-widest">Prezzo</span>
+                              <span className="font-serif italic text-sm font-bold">{bookingData.service?.price / 100}€</span>
+                            </div>
+                          </div>
+
+                          {/* Ticket Main Details */}
+                          <div className="p-6 md:p-8 bg-card flex flex-col gap-6 relative">
+                            {/* Client & Operator info */}
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <span className="text-[9px] font-bold text-muted uppercase tracking-wider block">Servizio</span>
+                                <span className="font-bold text-foreground text-sm sm:text-base leading-tight mt-1 block">{bookingData.service?.name}</span>
+                                <span className="text-[10px] text-muted-foreground mt-0.5 block">{bookingData.service?.duration} min</span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-bold text-muted uppercase tracking-wider block">Barber Designer</span>
+                                <span className="font-bold text-foreground text-sm sm:text-base leading-tight mt-1 block">{bookingData.operator?.name}</span>
+                                <span className="text-[10px] text-muted-foreground mt-0.5 block">Poltrona 0{Math.floor(Math.random() * 3) + 1}</span>
+                              </div>
+                            </div>
+
+                            {/* Date and Time info */}
+                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-brand/5">
+                              <div>
+                                <span className="text-[9px] font-bold text-muted uppercase tracking-wider block">Data</span>
+                                <span className="font-bold text-foreground text-sm sm:text-base leading-tight mt-1 block">
+                                  {bookingData.date?.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] font-bold text-muted uppercase tracking-wider block">Orario</span>
+                                <span className="font-black text-brand text-base sm:text-lg tracking-tight mt-0.5 block">
+                                  ore {bookingData.time}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Perforated Divider Section */}
+                          <div className="relative h-6 bg-card flex items-center justify-between pointer-events-none">
+                            {/* Circular notches */}
+                            <div className="w-4 h-6 rounded-r-full bg-background border-r border-y border-brand/10 -ml-0.5" />
+                            <div className="flex-1 border-t-2 border-dashed border-brand/15 mx-2" />
+                            <div className="w-4 h-6 rounded-l-full bg-background border-l border-y border-brand/10 -mr-0.5" />
+                          </div>
+
+                          {/* Ticket Bottom Barcode Section */}
+                          <div className="p-6 bg-muted/20 border-t border-brand/5 flex flex-col items-center justify-center gap-4 text-center">
+                            {/* Simulated Barcode */}
+                            <div className="flex flex-col items-center justify-center gap-1.5 w-full max-w-[200px] mx-auto select-none opacity-85">
+                              <div className="h-10 w-full flex items-stretch gap-[1.5px] bg-foreground/5 p-1 rounded-sm">
+                                {[...Array(38)].map((_, i) => {
+                                  const widths = ["w-[1px]", "w-[2px]", "w-[3px]", "w-[1px]"];
+                                  const widthClass = widths[i % widths.length];
+                                  const isDark = (i * 7 + 13) % 11 > 3;
+                                  return (
+                                    <div 
+                                      key={i} 
+                                      className={`h-full ${widthClass} ${isDark ? 'bg-foreground' : 'bg-transparent'} flex-1`} 
+                                    />
+                                  );
+                                })}
+                              </div>
+                              <span className="text-[8px] font-mono text-muted tracking-[0.4em] uppercase">
+                                FA-{bookingData.time?.replace(':', '')}-{bookingData.date?.getDate()}0{bookingData.date ? bookingData.date.getMonth() + 1 : 1}
+                              </span>
+                            </div>
+
+                            <p className="text-[9px] font-semibold text-muted uppercase tracking-widest leading-relaxed max-w-[240px]">
+                              Mostra questo pass all'accoglienza in salone.
+                            </p>
                           </div>
                         </div>
 
@@ -729,7 +863,7 @@ export default function BookAppointmentPage() {
             <ul className="space-y-4 text-muted">
               <li><Link href="/" className="hover:text-brand transition-colors">Home</Link></li>
               <li><Link href="/wellness" className="hover:text-brand transition-colors">Wellness</Link></li>
-              <li><Link href="/shop" className="hover:text-brand transition-colors">Shop</Link></li>
+              <li><Link href="/products" className="hover:text-brand transition-colors">Products</Link></li>
               <li><Link href="/book-appointment" className="hover:text-brand transition-colors">Prenotazioni</Link></li>
             </ul>
           </div>

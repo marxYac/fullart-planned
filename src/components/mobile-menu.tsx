@@ -10,7 +10,7 @@ const menuLinks = [
   { href: "/", label: "Home" },
   { href: "/#servizi", label: "Servizi" },
   { href: "/wellness", label: "Wellness" },
-  { href: "/shop", label: "Shop" },
+  { href: "/products", label: "Products" },
   { href: "/book-appointment", label: "Prenotazioni" },
 ];
 

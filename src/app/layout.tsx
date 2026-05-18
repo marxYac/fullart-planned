@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "sonner";
+import { MobileTabBar } from "@/components/mobile-tab-bar";
+import { Suspense } from "react";
 import "./globals.css";
 
 
@@ -44,6 +46,9 @@ export default function RootLayout({
             disableTransitionOnChange
           >
             {children}
+            <Suspense fallback={null}>
+              <MobileTabBar />
+            </Suspense>
             <Toaster richColors position="top-center" />
           </ThemeProvider>
         </body>

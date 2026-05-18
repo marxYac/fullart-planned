@@ -109,7 +109,7 @@ export async function addProduct(data: { name: string; description: string; pric
     category: data.category,
   });
   revalidatePath("/admin");
-  revalidatePath("/shop");
+  revalidatePath("/products");
 }
 
 export async function removeProduct(productId: string) {
@@ -120,5 +120,5 @@ export async function removeProduct(productId: string) {
 
   await db.delete(products).where(eq(products.id, productId));
   revalidatePath("/admin");
-  revalidatePath("/shop");
+  revalidatePath("/products");
 }

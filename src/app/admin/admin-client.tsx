@@ -656,7 +656,7 @@ export function AdminDashboardClient({
               }`}
             >
               <ShoppingBag className="w-4 h-4" />
-              Shop
+              Prodotti
             </button>
           </>
         )}
@@ -1049,7 +1049,7 @@ export function AdminDashboardClient({
           <div className="grid lg:grid-cols-3 gap-8">
             <Card className="lg:col-span-2 glass-effect border-brand/10">
               <CardHeader>
-                <CardTitle>Prodotti Shop</CardTitle>
+                <CardTitle>Prodotti</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="overflow-x-auto">

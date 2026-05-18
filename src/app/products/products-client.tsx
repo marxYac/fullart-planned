@@ -3,11 +3,11 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowLeft, ShoppingBag, Sparkles, Package, ShieldCheck, Plus, Search } from "lucide-react";
-import { ModeToggle } from "@/components/mode-toggle";
-import { MobileMenu } from "@/components/mobile-menu";
+import { ArrowLeft, ShoppingBag, Sparkles, Package, ShieldCheck, Plus, Search, LayoutDashboard } from "lucide-react";
+import { useUser, UserButton, SignInButton } from "@clerk/nextjs";
 import Image from "next/image";
 import { useState } from "react";
+import { ModeToggle } from "@/components/mode-toggle";
 
 const categories = [
   { name: "STYLING", count: "12 PRODOTTI", icon: <Sparkles className="w-8 h-8" />, span: "md:col-span-8", id: "styling" },
@@ -26,7 +26,10 @@ type Product = {
   inStock: boolean;
 };
 
-export function ShopClient({ products }: { products: Product[] }) {
+export function ProductsClient({ products }: { products: Product[] }) {
+  const { isSignedIn, isLoaded, user } = useUser();
+  const role = user?.publicMetadata?.role as string | undefined;
+  const canAccessDashboard = role === "admin" || role === "super_user" || role === "operator";
   const [activeCategory, setActiveCategory] = useState<string>("all");
 
   const filteredProducts = activeCategory === "all" 
@@ -46,14 +49,48 @@ export function ShopClient({ products }: { products: Product[] }) {
             FULLART
           </Link>
           <div className="nav-actions">
-            <span className="hidden lg:inline text-[10px] font-bold text-muted tracking-[0.2em] uppercase">Shop / Premium Products</span>
+            <span className="hidden lg:inline text-[10px] font-bold text-muted tracking-[0.2em] uppercase mr-2">Prodotti / Premium Collection</span>
             <ModeToggle />
+
+            {isLoaded && !isSignedIn && (
+              <SignInButton mode="redirect">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="flex hover:bg-brand/10 hover:text-brand transition-all font-semibold h-9"
+                >
+                  ACCEDI
+                </Button>
+              </SignInButton>
+            )}
+            {isLoaded && isSignedIn && (
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: "w-8 h-8 md:w-9 md:h-9 border border-brand/20",
+                  },
+                }}
+              />
+            )}
+
+            {isLoaded && isSignedIn && canAccessDashboard && (
+              <Link href="/admin">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-brand hover:bg-brand/10 rounded-xl"
+                  aria-label="Accedi alla Dashboard"
+                >
+                  <LayoutDashboard className="w-5 h-5" />
+                </Button>
+              </Link>
+            )}
+
             <Link href="/book-appointment" className="hidden sm:block">
                <Button size="sm" className="bg-brand hover:bg-brand-hover text-white rounded-xl px-4 sm:px-6 transition-all h-9 sm:h-10 text-xs sm:text-sm font-bold">
                  PRENOTA
                </Button>
             </Link>
-            <MobileMenu />
           </div>
         </div>
       </nav>
@@ -88,7 +125,28 @@ export function ShopClient({ products }: { products: Product[] }) {
             <div className="text-brand/20 text-8xl font-black select-none hidden md:block">03</div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-5 md:gap-6 mb-16">
+          {/* Mobile horizontal categories filter (only visible on mobile) */}
+          <div className="md:hidden flex overflow-x-auto gap-3 pb-4 mb-8 no-scrollbar scroll-smooth -mx-4 px-4 mask-gradient-x">
+            <button
+              onClick={() => setActiveCategory("all")}
+              className={`px-5 py-3 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-2 select-none cursor-pointer ${activeCategory === "all" ? 'bg-brand text-white border-brand shadow-lg shadow-brand/20' : 'bg-card border-brand/10 text-muted-foreground'}`}
+            >
+              ✨ Tutti
+            </button>
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.name.toLowerCase() === activeCategory ? "all" : cat.name.toLowerCase())}
+                className={`px-5 py-3 rounded-full text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-2 select-none cursor-pointer ${activeCategory === cat.name.toLowerCase() ? 'bg-brand text-white border-brand shadow-lg shadow-brand/20' : 'bg-card border-brand/10 text-muted-foreground'}`}
+              >
+                <span className="size-4 flex items-center justify-center shrink-0 [&_svg]:size-3.5">{cat.icon}</span>
+                {cat.name}
+              </button>
+            ))}
+          </div>
+
+          {/* Desktop Categories Grid (hidden on mobile) */}
+          <div className="hidden md:grid grid-cols-12 gap-5 md:gap-6 mb-16">
             {categories.map((cat, index) => (
               <motion.div
                 key={cat.id}
@@ -108,18 +166,18 @@ export function ShopClient({ products }: { products: Product[] }) {
               </motion.div>
             ))}
           </div>
-
+ 
           {/* Product Grid */}
           <div className="flex items-center justify-between mb-8">
-            <h3 className="text-2xl font-bold tracking-tight">
+            <h3 className="text-xl md:text-2xl font-bold tracking-tight">
               {activeCategory === "all" ? "Tutti i Prodotti" : activeCategory.toUpperCase()}
             </h3>
-            <span className="text-sm font-medium text-muted bg-surface px-3 py-1 rounded-full">
+            <span className="text-xs md:text-sm font-medium text-muted bg-surface px-3 py-1 rounded-full">
               {filteredProducts.length} risultati
             </span>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+ 
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-8">
             {filteredProducts.map((product, index) => (
               <motion.div
                 key={product.id}
@@ -127,10 +185,10 @@ export function ShopClient({ products }: { products: Product[] }) {
                 whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
                 transition={{ delay: (index % 4) * 0.1, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-                className="group flex flex-col relative"
+                className="group flex flex-col relative bg-card/40 rounded-2xl md:rounded-3xl p-3 md:p-4 border border-brand/5 hover:border-brand/15 transition-all duration-300"
               >
                 {/* Product Card Image */}
-                <div className="relative aspect-[4/5] bg-surface rounded-2xl md:rounded-3xl overflow-hidden mb-5 soft-shadow border border-brand/5 group-hover:border-brand/20 transition-colors">
+                <div className="relative aspect-[4/5] bg-surface rounded-xl md:rounded-2xl overflow-hidden mb-4 soft-shadow border border-brand/5 group-hover:border-brand/20 transition-colors">
                   {product.image ? (
                     <Image
                       src={product.image}
@@ -140,33 +198,32 @@ export function ShopClient({ products }: { products: Product[] }) {
                     />
                   ) : (
                     <div className="absolute inset-0 flex items-center justify-center text-muted">
-                      <ShoppingBag className="w-12 h-12 opacity-20" />
+                      <ShoppingBag className="w-8 h-8 opacity-20" />
                     </div>
                   )}
                   
                   {/* Status Badge */}
                   {!product.inStock && (
-                    <div className="absolute top-4 left-4 bg-background/80 backdrop-blur-md text-foreground px-3 py-1 text-[10px] font-bold uppercase tracking-widest rounded-full">
+                    <div className="absolute top-3 left-3 bg-background/80 backdrop-blur-md text-foreground px-2 py-0.5 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest rounded-full">
                       Esaurito
                     </div>
                   )}
-                  
                 </div>
-
+ 
                 {/* Product Info */}
-                <div className="flex flex-col flex-1 px-1">
-                  <div className="mb-2">
-                    <h4 className="font-bold text-lg leading-tight group-hover:text-brand transition-colors">
+                <div className="flex flex-col flex-1">
+                  <div className="mb-1">
+                    <h4 className="font-bold text-sm sm:text-base md:text-lg leading-tight group-hover:text-brand transition-colors line-clamp-1">
                       {product.name}
                     </h4>
                   </div>
                   {product.category && (
-                    <span className="text-[10px] font-bold text-muted uppercase tracking-widest mb-2">
+                    <span className="text-[8px] sm:text-[9px] font-bold text-muted uppercase tracking-widest mb-2">
                       {product.category}
                     </span>
                   )}
                   {product.description && (
-                    <p className="text-sm text-muted line-clamp-2 mt-auto">
+                    <p className="text-xs text-muted line-clamp-2 mt-auto leading-relaxed hidden sm:block">
                       {product.description}
                     </p>
                   )}
@@ -199,7 +256,7 @@ export function ShopClient({ products }: { products: Product[] }) {
           <div className="relative z-10">
             <h2 className="section-title font-bold tracking-tighter mb-8">Resta aggiornato.</h2>
             <p className="lede opacity-80 mb-10 md:mb-12 font-light max-w-lg mx-auto">
-              Iscriviti alla nostra newsletter per ricevere novità sui prodotti e sconti esclusivi.
+              Iscriviti alla nostra newsletter per ricevere novità sui prodotti e consigli di stile esclusivi.
             </p>
             
             <form className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto" onSubmit={(e) => e.preventDefault()}>

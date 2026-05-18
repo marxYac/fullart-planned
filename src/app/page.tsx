@@ -5,9 +5,8 @@ import { Button } from "@/components/ui/button";
 import { SignInButton, useUser, UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, Leaf, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Leaf, ShieldCheck, Sparkles, LayoutDashboard } from "lucide-react";
 import { ModeToggle } from "@/components/mode-toggle";
-import { MobileMenu } from "@/components/mobile-menu";
 
 const fadeInUp = {
   initial: { opacity: 0, y: 20 },
@@ -44,19 +43,20 @@ export default function Home() {
             <Link href="#servizi" className="hover:text-brand transition-colors">Servizi</Link>
             <Link href="#manifesto" className="hover:text-brand transition-colors">Manifesto</Link>
             <Link href="/wellness" className="hover:text-brand transition-colors">Wellness</Link>
-            <Link href="/shop" className="hover:text-brand transition-colors">Shop</Link>
+            <Link href="/products" className="hover:text-brand transition-colors">Products</Link>
             {canAccessDashboard && (
               <Link href="/admin" className="hover:text-brand transition-colors font-bold text-brand">Dashboard</Link>
             )}
           </div>
 
           <div className="nav-actions">
+            <ModeToggle />
             {isLoaded && !isSignedIn && (
               <SignInButton mode="redirect">
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="hidden sm:flex hover:bg-brand/10 hover:text-brand transition-all font-semibold h-9"
+                  className="flex hover:bg-brand/10 hover:text-brand transition-all font-semibold h-9"
                 >
                   ACCEDI
                 </Button>
@@ -71,13 +71,25 @@ export default function Home() {
                 }}
               />
             )}
-            <ModeToggle />
+
+            {isLoaded && isSignedIn && canAccessDashboard && (
+              <Link href="/admin">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-brand hover:bg-brand/10 rounded-xl"
+                  aria-label="Accedi alla Dashboard"
+                >
+                  <LayoutDashboard className="w-5 h-5" />
+                </Button>
+              </Link>
+            )}
+
             <Link href="/book-appointment" className="hidden sm:block">
               <Button size="sm" className="bg-brand hover:bg-brand-hover text-white rounded-xl px-4 sm:px-6 transition-all shadow-lg shadow-brand/20 h-9 sm:h-10 text-xs sm:text-sm font-bold">
                 PRENOTA
               </Button>
             </Link>
-            <MobileMenu />
           </div>
         </div>
       </nav>
@@ -344,7 +356,7 @@ export default function Home() {
             <ul className="space-y-4 text-muted">
               <li><Link href="/" className="hover:text-brand transition-colors">Home</Link></li>
               <li><Link href="/wellness" className="hover:text-brand transition-colors">Wellness</Link></li>
-              <li><Link href="/shop" className="hover:text-brand transition-colors">Shop</Link></li>
+              <li><Link href="/products" className="hover:text-brand transition-colors">Products</Link></li>
               <li><Link href="/book-appointment" className="hover:text-brand transition-colors">Prenotazioni</Link></li>
             </ul>
           </div>
