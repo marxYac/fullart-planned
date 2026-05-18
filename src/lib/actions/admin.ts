@@ -122,3 +122,28 @@ export async function removeProduct(productId: string) {
   revalidatePath("/admin");
   revalidatePath("/products");
 }
+
+export async function updateProduct(
+  productId: string,
+  data: { name: string; description: string; price: number; image: string; category: string; inStock?: boolean }
+) {
+  const callerRole = await getCurrentUserRole();
+  if (callerRole !== "admin" && callerRole !== "super_user") {
+    throw new Error("Unauthorized");
+  }
+
+  await db.update(products)
+    .set({
+      name: data.name,
+      description: data.description || null,
+      price: data.price,
+      image: data.image || null,
+      category: data.category,
+      inStock: data.inStock !== undefined ? data.inStock : true,
+    })
+    .where(eq(products.id, productId));
+
+  revalidatePath("/admin");
+  revalidatePath("/products");
+}
+

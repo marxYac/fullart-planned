@@ -32,6 +32,7 @@ import {
   removeService,
   addProduct,
   removeProduct,
+  updateProduct,
 } from "@/lib/actions/admin";
 import { toast } from "sonner";
 import {
@@ -62,7 +63,8 @@ import {
   Calendar as CalendarIcon,
   Search,
   SlidersHorizontal,
-  Lock
+  Lock,
+  Package
 } from "lucide-react";
 import { AppointmentsTab } from "./components/appointments-tab";
 
@@ -113,6 +115,7 @@ type DashboardProduct = {
   price: number;
   image: string | null;
   category: string | null;
+  inStock: boolean;
 };
 
 type ActionType = "promote_operator" | "promote_admin" | "rollback" | "delete";
@@ -256,6 +259,35 @@ function RoleBadge({ role }: { role: UserRole }) {
 }
 
 // ---------------------------------------------------------------------------
+// Category badge
+// ---------------------------------------------------------------------------
+
+function CategoryBadge({ category }: { category: string | null }) {
+  const styles: Record<string, string> = {
+    hair: "bg-red-500/10 text-red-500 border border-red-500/20 dark:bg-red-950/20 dark:text-red-400 dark:border-red-900/30 shadow-[0_0_12px_rgba(239,68,68,0.05)]",
+    beard: "bg-amber-500/10 text-amber-500 border border-amber-500/20 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900/30 shadow-[0_0_12px_rgba(245,158,11,0.05)]",
+    wellness: "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900/30 shadow-[0_0_12px_rgba(16,185,129,0.05)]",
+    merch: "bg-purple-500/10 text-purple-500 border border-purple-500/20 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900/30 shadow-[0_0_12px_rgba(168,85,247,0.05)]",
+    other: "bg-slate-500/10 text-slate-500 border border-slate-500/20 dark:bg-slate-950/20 dark:text-slate-400 dark:border-slate-900/30 shadow-[0_0_12px_rgba(100,116,139,0.05)]",
+  };
+  const labels: Record<string, string> = {
+    hair: "Capelli",
+    beard: "Barba",
+    wellness: "Benessere",
+    merch: "Merchandising",
+    other: "Altro",
+  };
+  const cat = category || "other";
+  return (
+    <span
+      className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wider uppercase inline-flex items-center gap-1 transition-all ${styles[cat] || styles.other}`}
+    >
+      {labels[cat] || cat}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -287,6 +319,11 @@ export function AdminDashboardClient({
   const [userFilter, setUserFilter] = useState<"all" | "staff" | "client" | "admin" | "operator">("all");
   const [userSortOrder, setUserSortOrder] = useState<"name-asc" | "name-desc" | "role">("name-asc");
 
+  // Search, Filter & Sort states for Services Section
+  const [serviceSearch, setServiceSearch] = useState("");
+  const [serviceFilter, setServiceFilter] = useState<"all" | "hair" | "beard" | "wellness" | "other">("all");
+  const [serviceSortOrder, setServiceSortOrder] = useState<"name-asc" | "name-desc" | "price-asc" | "price-desc" | "duration-asc" | "duration-desc">("name-asc");
+
   // Form states
   const [newService, setNewService] = useState({
     name: "",
@@ -304,6 +341,15 @@ export function AdminDashboardClient({
     image: "",
     category: "wellness",
   });
+  const [editingProduct, setEditingProduct] = useState<DashboardProduct | null>(null);
+
+  // Search, Filter & Sort states for Products Section
+  const [productSearch, setProductSearch] = useState("");
+  const [productCategoryFilter, setProductCategoryFilter] = useState<"all" | "hair" | "beard" | "wellness" | "merch" | "other">("all");
+  const [productStockFilter, setProductStockFilter] = useState<"all" | "in_stock" | "out_of_stock">("all");
+  const [productSortOrder, setProductSortOrder] = useState<"name-asc" | "name-desc" | "price-asc" | "price-desc">("name-asc");
+  
+  const fileInputRefEdit = useRef<HTMLInputElement>(null);
 
   const selectedUser = initialUsers.find((u) => u.clerkId === selectedUserId);
 
@@ -345,6 +391,90 @@ export function AdminDashboardClient({
   const staffUsers = initialUsers.filter((u) => u.role !== "client").length;
   const clientUsers = initialUsers.filter((u) => u.role === "client").length;
   const newThisMonth = Math.ceil(initialUsers.length * 0.12) || 1;
+
+  // Filtered and Sorted services list
+  const filteredServices = initialServices
+    .filter((service) => {
+      const nameMatch = service.name.toLowerCase().includes(serviceSearch.toLowerCase());
+      const descMatch = (service.description || "").toLowerCase().includes(serviceSearch.toLowerCase());
+      const matchesSearch = nameMatch || descMatch;
+
+      if (serviceFilter === "all") return matchesSearch;
+      return matchesSearch && service.category === serviceFilter;
+    })
+    .sort((a, b) => {
+      if (serviceSortOrder === "name-asc") {
+        return a.name.localeCompare(b.name);
+      }
+      if (serviceSortOrder === "name-desc") {
+        return b.name.localeCompare(a.name);
+      }
+      if (serviceSortOrder === "price-asc") {
+        return a.price - b.price;
+      }
+      if (serviceSortOrder === "price-desc") {
+        return b.price - a.price;
+      }
+      if (serviceSortOrder === "duration-asc") {
+        return a.duration - b.duration;
+      }
+      if (serviceSortOrder === "duration-desc") {
+        return b.duration - a.duration;
+      }
+      return 0;
+    });
+
+  // Dynamic Statistics for Services
+  const totalServices = initialServices.length;
+  const averagePrice = initialServices.length > 0
+    ? initialServices.reduce((sum, s) => sum + s.price, 0) / initialServices.length
+    : 0;
+  const averageDuration = initialServices.length > 0
+    ? initialServices.reduce((sum, s) => sum + s.duration, 0) / initialServices.length
+    : 0;
+
+  // Filtered and Sorted products list
+  const filteredProducts = initialProducts
+    .filter((product) => {
+      const nameMatch = product.name.toLowerCase().includes(productSearch.toLowerCase());
+      const descMatch = (product.description || "").toLowerCase().includes(productSearch.toLowerCase());
+      const matchesSearch = nameMatch || descMatch;
+
+      // Category filter
+      const matchesCategory = productCategoryFilter === "all" || product.category === productCategoryFilter;
+
+      // Stock status filter
+      let matchesStock = true;
+      if (productStockFilter === "in_stock") {
+        matchesStock = product.inStock === true;
+      } else if (productStockFilter === "out_of_stock") {
+        matchesStock = product.inStock === false;
+      }
+
+      return matchesSearch && matchesCategory && matchesStock;
+    })
+    .sort((a, b) => {
+      if (productSortOrder === "name-asc") {
+        return a.name.localeCompare(b.name);
+      }
+      if (productSortOrder === "name-desc") {
+        return b.name.localeCompare(a.name);
+      }
+      if (productSortOrder === "price-asc") {
+        return a.price - b.price;
+      }
+      if (productSortOrder === "price-desc") {
+        return b.price - a.price;
+      }
+      return 0;
+    });
+
+  // Dynamic Statistics for Products
+  const totalProducts = initialProducts.length;
+  const averageProductPrice = initialProducts.length > 0
+    ? initialProducts.reduce((sum, p) => sum + p.price, 0) / initialProducts.length
+    : 0;
+  const outOfStockProducts = initialProducts.filter((p) => !p.inStock).length;
 
   // Open the confirm dialog for an action
   const requestAction = (action: ActionType, user: DashboardUser) => {
@@ -467,6 +597,49 @@ export function AdminDashboardClient({
     }
   };
 
+  const handleUpdateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+    setLoading(true);
+    try {
+      await updateProduct(editingProduct.id, {
+        name: editingProduct.name,
+        description: editingProduct.description || "",
+        price: editingProduct.price,
+        image: editingProduct.image || "",
+        category: editingProduct.category || "wellness",
+        inStock: editingProduct.inStock,
+      });
+      toast.success("Prodotto aggiornato");
+      setEditingProduct(null);
+      router.refresh();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleStock = async (product: DashboardProduct) => {
+    setLoading(true);
+    try {
+      await updateProduct(product.id, {
+        name: product.name,
+        description: product.description || "",
+        price: product.price,
+        image: product.image || "",
+        category: product.category || "wellness",
+        inStock: !product.inStock,
+      });
+      toast.success(`Prodotto impostato come ${!product.inStock ? "Disponibile" : "Esaurito"}`);
+      router.refresh();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // -------------------------------------------------------------------------
   // Confirm Dialog
   // -------------------------------------------------------------------------
@@ -534,29 +707,36 @@ export function AdminDashboardClient({
           if (!open) setEditingService(null);
         }}
       >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Modifica Servizio</DialogTitle>
-            <DialogDescription>
-              Aggiorna i dettagli del servizio.
-            </DialogDescription>
+        <DialogContent className="max-w-md rounded-2xl border border-brand/10 bg-background/95 backdrop-blur-xl shadow-2xl p-6 overflow-hidden">
+          <DialogHeader className="mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-brand/10 text-brand rounded-xl border border-brand/15">
+                <Scissors className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-extrabold text-foreground">Modifica Servizio</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Aggiorna i dettagli e le tariffe del trattamento selezionato.
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           
           {editingService && (
             <form onSubmit={handleUpdateService} className="space-y-4">
               <div className="space-y-2">
-                <Label>Nome</Label>
+                <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Nome del Servizio</Label>
                 <Input
                   required
                   value={editingService.name}
                   onChange={(e) =>
                     setEditingService({ ...editingService, name: e.target.value })
                   }
-                  className="bg-background/50"
+                  className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
                 />
               </div>
               <div className="space-y-2">
-                <Label>Descrizione</Label>
+                <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Descrizione</Label>
                 <Input
                   value={editingService.description || ""}
                   onChange={(e) =>
@@ -565,12 +745,12 @@ export function AdminDashboardClient({
                       description: e.target.value,
                     })
                   }
-                  className="bg-background/50"
+                  className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Durata (min)</Label>
+                  <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Durata (min)</Label>
                   <Input
                     type="number"
                     required
@@ -581,11 +761,11 @@ export function AdminDashboardClient({
                         duration: parseInt(e.target.value),
                       })
                     }
-                    className="bg-background/50"
+                    className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Prezzo (€)</Label>
+                  <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Prezzo (€)</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -597,16 +777,16 @@ export function AdminDashboardClient({
                         price: parseFloat(e.target.value) * 100,
                       })
                     }
-                    className="bg-background/50"
+                    className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Categoria</Label>
+                <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Categoria</Label>
                 <select
                   value={editingService.category || "hair"}
                   onChange={(e) => setEditingService({ ...editingService, category: e.target.value })}
-                  className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-11 w-full rounded-xl border border-brand/10 bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus:border-brand focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="hair">Capelli</option>
                   <option value="beard">Barba</option>
@@ -615,8 +795,8 @@ export function AdminDashboardClient({
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>Icona</Label>
-                <div className="grid grid-cols-5 gap-2 bg-background/50 p-2 rounded-xl border border-input">
+                <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Icona Rappresentativa</Label>
+                <div className="grid grid-cols-5 gap-2 bg-background/50 p-2.5 rounded-xl border border-brand/10">
                   {availableIcons.map((icn) => {
                     const Icon = icn.icon;
                     const isSelected = editingService.icon === icn.value;
@@ -625,10 +805,10 @@ export function AdminDashboardClient({
                         key={icn.value}
                         type="button"
                         onClick={() => setEditingService({ ...editingService, icon: icn.value })}
-                        className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg border transition-all ${
+                        className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg border transition-all duration-200 cursor-pointer ${
                           isSelected
-                            ? "border-brand bg-brand/10 text-brand shadow-sm"
-                            : "border-transparent hover:bg-muted/10 text-muted"
+                            ? "border-brand bg-brand/10 text-brand shadow-sm scale-[1.05]"
+                            : "border-transparent hover:bg-muted/10 text-muted-foreground hover:text-brand"
                         }`}
                         title={icn.label}
                       >
@@ -642,16 +822,179 @@ export function AdminDashboardClient({
                 </div>
               </div>
               
-              <DialogFooter className="mt-6">
+              <DialogFooter className="mt-6 gap-2">
                 <Button
                   variant="outline"
                   type="button"
                   onClick={() => setEditingService(null)}
                   disabled={loading}
+                  className="rounded-xl h-11 px-4 cursor-pointer"
                 >
                   Annulla
                 </Button>
-                <Button type="submit" disabled={loading} className="bg-brand text-white hover:bg-brand-hover">
+                <Button 
+                  type="submit" 
+                  disabled={loading} 
+                  className="bg-brand text-white hover:bg-brand-hover rounded-xl h-11 px-6 font-bold shadow-md hover:shadow-brand/20 transition-all duration-200 cursor-pointer"
+                >
+                  {loading ? "Salvataggio..." : "Salva Modifiche"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Product Dialog */}
+      <Dialog
+        open={!!editingProduct}
+        onOpenChange={(open) => {
+          if (!open) setEditingProduct(null);
+        }}
+      >
+        <DialogContent className="max-w-md rounded-2xl border border-brand/10 bg-background/95 backdrop-blur-xl shadow-2xl p-6 overflow-hidden">
+          <DialogHeader className="mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-brand/10 text-brand rounded-xl border border-brand/15">
+                <ShoppingBag className="w-5 h-5 text-brand" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-extrabold text-foreground">Modifica Prodotto</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Aggiorna i dettagli, il prezzo e la disponibilità in magazzino.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+          
+          {editingProduct && (
+            <form onSubmit={handleUpdateProduct} className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Nome del Prodotto</Label>
+                <Input
+                  required
+                  value={editingProduct.name}
+                  onChange={(e) =>
+                    setEditingProduct({ ...editingProduct, name: e.target.value })
+                  }
+                  className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Descrizione</Label>
+                <Input
+                  value={editingProduct.description || ""}
+                  onChange={(e) =>
+                    setEditingProduct({
+                      ...editingProduct,
+                      description: e.target.value,
+                    })
+                  }
+                  className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Prezzo (€)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={Number.isNaN(editingProduct.price) ? "" : (editingProduct.price / 100).toFixed(2)}
+                    onChange={(e) =>
+                      setEditingProduct({
+                        ...editingProduct,
+                        price: Math.round(parseFloat(e.target.value) * 100) || 0,
+                      })
+                    }
+                    className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Categoria</Label>
+                  <select
+                    value={editingProduct.category || "wellness"}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
+                    className="flex h-11 w-full rounded-xl border border-brand/10 bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus:border-brand focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                  >
+                    <option value="hair">Capelli</option>
+                    <option value="beard">Barba</option>
+                    <option value="wellness">Benessere</option>
+                    <option value="merch">Merchandising</option>
+                    <option value="other">Altro</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 bg-background/50 rounded-xl border border-brand/10">
+                <div className="space-y-0.5">
+                  <Label className="text-xs font-extrabold uppercase tracking-wider text-foreground">Disponibilità Magazzino</Label>
+                  <p className="text-[10px] text-muted-foreground">Mostra questo prodotto come disponibile nello shop.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingProduct({ ...editingProduct, inStock: !editingProduct.inStock })}
+                  className={`w-12 h-6 flex items-center rounded-full p-1 transition-all duration-300 ${
+                    editingProduct.inStock ? "bg-green-500 justify-end" : "bg-muted justify-start"
+                  }`}
+                >
+                  <span className="bg-white w-4 h-4 rounded-full shadow-md" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Immagine Prodotto</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRefEdit}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setEditingProduct({ ...editingProduct, image: reader.result as string });
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                  className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11 cursor-pointer file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand/10 file:text-brand hover:file:bg-brand/20"
+                />
+                {editingProduct.image && (
+                  <div className="mt-2 w-20 h-20 rounded-lg overflow-hidden border border-brand/20 relative group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={editingProduct.image} alt="Preview" className="object-cover w-full h-full group-hover:opacity-50 transition-opacity" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingProduct({ ...editingProduct, image: "" });
+                        if (fileInputRefEdit.current) {
+                          fileInputRefEdit.current.value = "";
+                        }
+                      }}
+                      className="absolute inset-0 m-auto w-8 h-8 flex items-center justify-center bg-background/80 text-foreground hover:text-brand hover:bg-background rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm shadow-sm border border-brand/10"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              <DialogFooter className="mt-6 gap-2">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  disabled={loading}
+                  className="rounded-xl h-11 px-4 cursor-pointer"
+                >
+                  Annulla
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={loading} 
+                  className="bg-brand text-white hover:bg-brand-hover rounded-xl h-11 px-6 font-bold shadow-md hover:shadow-brand/20 transition-all duration-200 cursor-pointer"
+                >
                   {loading ? "Salvataggio..." : "Salva Modifiche"}
                 </Button>
               </DialogFooter>
@@ -1315,261 +1658,459 @@ export function AdminDashboardClient({
         {/* Services Tab                                                        */}
         {/* ------------------------------------------------------------------ */}
         {activeTab === "services" && (
-          <div className="grid lg:grid-cols-3 gap-8">
-            <Card className="lg:col-span-2 glass-effect border-brand/10">
-              <CardHeader>
-                <CardTitle>Servizi Attivi</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                {/* Desktop View */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <tbody className="divide-y divide-brand/10">
-                      {initialServices.map((service) => {
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Stats Cards Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Stats Card 1: Total Services */}
+              <div className="glass-effect relative overflow-hidden group p-6 rounded-2xl border border-brand/10 bg-card/40 backdrop-blur-md transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-0.5">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-brand/5 to-transparent rounded-bl-full pointer-events-none" />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <span className="text-xs uppercase font-extrabold tracking-widest text-muted">Trattamenti Totali</span>
+                    <h3 className="text-3xl font-extrabold tracking-tight text-foreground">{totalServices}</h3>
+                    <p className="text-xs text-muted">
+                      Nel listino attivo
+                    </p>
+                  </div>
+                  <div className="p-3 bg-brand/10 text-brand rounded-xl group-hover:scale-110 transition-transform duration-300">
+                    <Scissors className="w-6 h-6" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats Card 2: Average Price */}
+              <div className="glass-effect relative overflow-hidden group p-6 rounded-2xl border border-brand/10 bg-card/40 backdrop-blur-md transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-0.5">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-purple-500/5 to-transparent rounded-bl-full pointer-events-none" />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <span className="text-xs uppercase font-extrabold tracking-widest text-muted">Prezzo Medio</span>
+                    <h3 className="text-3xl font-extrabold tracking-tight text-foreground">€{(averagePrice / 100).toFixed(2)}</h3>
+                    <p className="text-xs text-muted">
+                      Valore medio servizio
+                    </p>
+                  </div>
+                  <div className="p-3 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                    <Sparkles className="w-6 h-6" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats Card 3: Average Duration */}
+              <div className="glass-effect relative overflow-hidden group p-6 rounded-2xl border border-brand/10 bg-card/40 backdrop-blur-md transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-0.5">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-green-500/5 to-transparent rounded-bl-full pointer-events-none" />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <span className="text-xs uppercase font-extrabold tracking-widest text-muted">Durata Media</span>
+                    <h3 className="text-3xl font-extrabold tracking-tight text-foreground">{Math.round(averageDuration)} min</h3>
+                    <p className="text-xs text-muted">
+                      Tempo medio per seduta
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-500/10 text-green-600 dark:text-green-400 rounded-xl group-hover:scale-110 transition-transform duration-300">
+                    <Clock className="w-6 h-6" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid lg:grid-cols-3 gap-8">
+              <Card className="lg:col-span-2 glass-effect border-brand/10 overflow-hidden shadow-xl rounded-2xl">
+                <CardHeader className="border-b border-brand/10 bg-brand/5 p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div className="space-y-1">
+                    <CardTitle className="text-2xl font-extrabold tracking-tight text-foreground">Menu Servizi</CardTitle>
+                    <CardDescription className="text-muted text-sm">
+                      Visualizza, cerca e ordina i trattamenti disponibili per la prenotazione.
+                    </CardDescription>
+                  </div>
+                  
+                  {/* Total counter info */}
+                  <div className="text-xs font-bold text-muted bg-surface/50 border border-brand/5 px-3 py-1.5 rounded-full w-fit">
+                    Visualizzati: <span className="text-brand">{filteredServices.length}</span> di {totalServices}
+                  </div>
+                </CardHeader>
+
+                {/* Controls bar (Search, Filter, Sort) */}
+                <div className="p-6 border-b border-brand/10 bg-surface/20 flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between">
+                  {/* Search Input */}
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground/60" />
+                    <Input
+                      type="text"
+                      placeholder="Cerca servizio..."
+                      value={serviceSearch}
+                      onChange={(e) => setServiceSearch(e.target.value)}
+                      className="pl-10 bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
+                    />
+                    {serviceSearch && (
+                      <button
+                        onClick={() => setServiceSearch("")}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-brand transition-colors p-1 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Filter Pills and Sort dropdown */}
+                  <div className="flex flex-wrap gap-2.5 items-center">
+                    <div className="flex items-center p-1 bg-surface border border-brand/10 rounded-xl overflow-x-auto gap-1">
+                      {(
+                        [
+                          { id: "all", label: "Tutti" },
+                          { id: "hair", label: "Capelli" },
+                          { id: "beard", label: "Barba" },
+                          { id: "wellness", label: "Benessere" },
+                          { id: "other", label: "Altro" },
+                        ] as const
+                      ).map((filter) => (
+                        <button
+                          key={filter.id}
+                          onClick={() => setServiceFilter(filter.id)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            serviceFilter === filter.id
+                              ? "bg-brand text-white shadow-sm"
+                              : "text-muted-foreground hover:text-brand hover:bg-brand/5"
+                          }`}
+                        >
+                          {filter.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Sort Select */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-muted hidden lg:inline-block">Ordina:</span>
+                      <select
+                        value={serviceSortOrder}
+                        onChange={(e) => setServiceSortOrder(e.target.value as any)}
+                        className="h-10 bg-background/50 border border-brand/10 focus-visible:ring-brand rounded-xl px-3 text-xs font-extrabold text-muted-foreground focus:outline-none focus:ring-2 focus:ring-brand"
+                      >
+                        <option value="name-asc">Nome (A-Z)</option>
+                        <option value="name-desc">Nome (Z-A)</option>
+                        <option value="price-asc">Prezzo (Crescente)</option>
+                        <option value="price-desc">Prezzo (Decrescente)</option>
+                        <option value="duration-asc">Durata (Crescente)</option>
+                        <option value="duration-desc">Durata (Decrescente)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <CardContent className="p-0">
+                  {/* Empty State */}
+                  {filteredServices.length === 0 && (
+                    <div className="p-12 text-center flex flex-col items-center justify-center space-y-4">
+                      <div className="p-4 bg-brand/5 text-brand rounded-full">
+                        <Scissors className="w-8 h-8 opacity-40 animate-pulse" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="font-extrabold text-foreground">Nessun servizio trovato</h4>
+                        <p className="text-sm text-muted max-w-sm">
+                          Nessun trattamento corrisponde ai criteri impostati. Riprova con un'altra parola chiave o filtro.
+                        </p>
+                      </div>
+                      {serviceSearch && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setServiceSearch("");
+                            setServiceFilter("all");
+                          }}
+                          className="border-brand/20 text-brand rounded-xl"
+                        >
+                          Azzera Filtri
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Desktop View */}
+                  {filteredServices.length > 0 && (
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-brand/5 border-b border-brand/10 text-[10px] tracking-widest uppercase font-extrabold text-muted-foreground/80">
+                            <th className="p-4 pl-6">Servizio</th>
+                            <th className="p-4">Categoria</th>
+                            <th className="p-4">Durata</th>
+                            <th className="p-4">Prezzo</th>
+                            <th className="p-4 text-right pr-6">Azioni</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-brand/10">
+                          {filteredServices.map((service) => {
+                            const iconData = availableIcons.find((i) => i.value === service.icon);
+                            const Icon = iconData ? iconData.icon : Scissors;
+                            
+                            return (
+                              <tr
+                                key={service.id}
+                                className="hover:bg-brand/5 transition-colors duration-200 group"
+                              >
+                                <td className="p-4 pl-6">
+                                  <div className="flex items-center gap-3.5">
+                                    <div className="p-2.5 bg-brand/10 text-brand rounded-xl border border-brand/15 group-hover:scale-105 transition-transform duration-300 shrink-0">
+                                      <Icon className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                      <div className="font-extrabold text-foreground text-sm">
+                                        {service.name}
+                                      </div>
+                                      <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1 max-w-md">
+                                        {service.description || "Nessuna descrizione"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  <CategoryBadge category={service.category} />
+                                </td>
+                                <td className="p-4">
+                                  <div className="inline-flex items-center gap-1.5 text-xs font-bold bg-muted/50 border border-brand/5 px-2.5 py-1 rounded-lg text-muted-foreground">
+                                    <Clock className="w-3.5 h-3.5 text-brand" />
+                                    <span>{service.duration} min</span>
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  <span className="text-sm font-extrabold text-brand bg-brand/5 border border-brand/10 px-2.5 py-1 rounded-lg">
+                                    €{(service.price / 100).toFixed(2)}
+                                  </span>
+                                </td>
+                                <td className="p-4 text-right pr-6">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-9 w-9 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-xl border border-transparent hover:border-blue-200 dark:hover:border-blue-900/50 transition-all cursor-pointer"
+                                      onClick={() => setEditingService(service)}
+                                      disabled={loading}
+                                      title="Modifica Servizio"
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-9 w-9 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl border border-transparent hover:border-red-200 dark:hover:border-red-900/50 transition-all cursor-pointer"
+                                      onClick={() => handleRemoveService(service.id)}
+                                      disabled={loading}
+                                      title="Elimina Servizio"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* Mobile Grid/List View */}
+                  {filteredServices.length > 0 && (
+                    <div className="block md:hidden divide-y divide-brand/10">
+                      {filteredServices.map((service) => {
                         const iconData = availableIcons.find((i) => i.value === service.icon);
                         const Icon = iconData ? iconData.icon : Scissors;
-                        
+
                         return (
-                        <tr
-                          key={service.id}
-                          className="hover:bg-brand/5 transition-colors"
-                        >
-                          <td className="p-4">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 bg-brand/10 text-brand rounded-lg">
-                                <Icon className="w-5 h-5" />
+                          <div key={service.id} className="p-4 hover:bg-brand/5 transition-colors duration-200">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-brand/10 text-brand rounded-xl border border-brand/15 shrink-0">
+                                  <Icon className="w-5 h-5" />
+                                </div>
+                                <div>
+                                  <div className="font-extrabold text-sm flex items-center gap-2 flex-wrap text-foreground">
+                                    {service.name}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                    {service.description || "Nessuna descrizione"}
+                                  </div>
+                                  <div className="flex gap-2 mt-2 flex-wrap items-center">
+                                    <CategoryBadge category={service.category} />
+                                    <div className="inline-flex items-center gap-1 text-[10px] font-extrabold uppercase bg-muted/50 border border-brand/5 px-2 py-0.5 rounded text-muted-foreground">
+                                      <Clock className="w-3.5 h-3.5 text-brand" />
+                                      <span>{service.duration} min</span>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
-                              <div>
-                                <div className="font-bold flex items-center gap-2">
-                                  {service.name}
-                                  {service.category && (
-                                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-surface text-muted border border-border">
-                                      {service.category === 'hair' ? 'Capelli' : service.category === 'beard' ? 'Barba' : service.category === 'wellness' ? 'Benessere' : service.category}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-xs text-muted">
-                                  {service.description}
-                                </div>
+
+                              <div className="shrink-0">
+                                <span className="text-sm font-extrabold text-brand bg-brand/5 border border-brand/10 px-2 py-1 rounded">
+                                  €{(service.price / 100).toFixed(2)}
+                                </span>
                               </div>
                             </div>
-                          </td>
-                          <td className="p-4 text-sm font-medium">
-                            {service.duration} min
-                          </td>
-                          <td className="p-4 text-sm font-bold text-brand">
-                            €{(service.price / 100).toFixed(2)}
-                          </td>
-                          <td className="p-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
+
+                            <div className="mt-4 flex items-center justify-end gap-2 border-t border-brand/5 pt-3">
                               <Button
-                                size="icon"
-                                variant="ghost"
-                                className="text-blue-500 hover:bg-blue-50 hover:text-blue-600"
+                                size="sm"
+                                variant="outline"
+                                className="text-blue-500 border-blue-200/50 hover:bg-blue-50 hover:text-blue-600 text-xs py-1 h-8 px-3 rounded-xl cursor-pointer"
                                 onClick={() => setEditingService(service)}
                                 disabled={loading}
                               >
-                                <Edit2 className="w-4 h-4" />
+                                <Edit2 className="w-3.5 h-3.5 mr-1" />
+                                Modifica
                               </Button>
                               <Button
-                                size="icon"
-                                variant="ghost"
-                                className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                                size="sm"
+                                variant="outline"
+                                className="text-red-500 border-red-200/50 hover:bg-red-50 hover:text-red-600 text-xs py-1 h-8 px-3 rounded-xl cursor-pointer"
                                 onClick={() => handleRemoveService(service.id)}
                                 disabled={loading}
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                Elimina
                               </Button>
                             </div>
-                          </td>
-                        </tr>
+                          </div>
                         );
                       })}
-                    </tbody>
-                  </table>
-                </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-                {/* Mobile Grid/List View */}
-                <div className="block md:hidden divide-y divide-brand/10">
-                  {initialServices.map((service) => {
-                    const iconData = availableIcons.find((i) => i.value === service.icon);
-                    const Icon = iconData ? iconData.icon : Scissors;
-
-                    return (
-                      <div key={service.id} className="p-4 hover:bg-brand/5 transition-colors">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2.5 bg-brand/10 text-brand rounded-xl shrink-0">
-                              <Icon className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
-                                {service.name}
-                                {service.category && (
-                                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-surface text-muted border border-border">
-                                    {service.category === 'hair' ? 'Capelli' : service.category === 'beard' ? 'Barba' : service.category === 'wellness' ? 'Benessere' : service.category}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                                {service.description || "Nessuna descrizione"}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-col items-end shrink-0 gap-1">
-                            <div className="text-sm font-bold text-brand">
-                              €{(service.price / 100).toFixed(2)}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground font-medium">
-                              {service.duration} min
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 flex items-center justify-end gap-2 border-t border-brand/5 pt-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-blue-500 border-blue-200/50 hover:bg-blue-50 hover:text-blue-600 text-xs py-1 h-8 rounded-lg"
-                            onClick={() => setEditingService(service)}
-                            disabled={loading}
-                          >
-                            <Edit2 className="w-3.5 h-3.5 mr-1" />
-                            Modifica
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="text-red-500 border-red-200/50 hover:bg-red-50 hover:text-red-600 text-xs py-1 h-8 rounded-lg"
-                            onClick={() => handleRemoveService(service.id)}
-                            disabled={loading}
-                          >
-                            <Trash2 className="w-3.5 h-3.5 mr-1" />
-                            Elimina
-                          </Button>
-                        </div>
+              {/* Form Nuovo Servizio */}
+              <Card className="glass-effect border-brand/10 h-fit shadow-xl rounded-2xl overflow-hidden">
+                <CardHeader className="border-b border-brand/10 bg-brand/5 p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-brand/10 text-brand rounded-xl border border-brand/15">
+                      <Scissors className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-xl font-extrabold text-foreground">Nuovo Servizio</CardTitle>
+                      <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                        Crea un nuovo trattamento per i clienti.
+                      </CardDescription>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <form onSubmit={handleAddService} className="space-y-5">
+                    <div className="space-y-2">
+                      <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Nome del Servizio</Label>
+                      <Input
+                        required
+                        placeholder="Es. Taglio Capelli Classico"
+                        value={newService.name}
+                        onChange={(e) =>
+                          setNewService({ ...newService, name: e.target.value })
+                        }
+                        className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Descrizione</Label>
+                      <Input
+                        placeholder="Es. Include shampoo, massaggio cutaneo..."
+                        value={newService.description}
+                        onChange={(e) =>
+                          setNewService({
+                            ...newService,
+                            description: e.target.value,
+                          })
+                        }
+                        className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Durata (min)</Label>
+                        <Input
+                          type="number"
+                          required
+                          value={Number.isNaN(newService.duration) ? "" : newService.duration}
+                          onChange={(e) =>
+                            setNewService({
+                              ...newService,
+                              duration: parseInt(e.target.value),
+                            })
+                          }
+                          className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
+                        />
                       </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="glass-effect border-brand/10 h-fit">
-              <CardHeader>
-                <CardTitle>Nuovo Servizio</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleAddService} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Nome</Label>
-                    <Input
-                      required
-                      value={newService.name}
-                      onChange={(e) =>
-                        setNewService({ ...newService, name: e.target.value })
-                      }
-                      className="bg-background/50"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Descrizione</Label>
-                    <Input
-                      value={newService.description}
-                      onChange={(e) =>
-                        setNewService({
-                          ...newService,
-                          description: e.target.value,
-                        })
-                      }
-                      className="bg-background/50"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Durata (min)</Label>
-                      <Input
-                        type="number"
-                        required
-                        value={Number.isNaN(newService.duration) ? "" : newService.duration}
-                        onChange={(e) =>
-                          setNewService({
-                            ...newService,
-                            duration: parseInt(e.target.value),
-                          })
-                        }
-                        className="bg-background/50"
-                      />
+                      <div className="space-y-2">
+                        <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Prezzo (€)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          required
+                          value={Number.isNaN(newService.price) ? "" : newService.price}
+                          onChange={(e) =>
+                            setNewService({
+                              ...newService,
+                              price: parseFloat(e.target.value),
+                            })
+                          }
+                          className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Prezzo (€)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        required
-                        value={Number.isNaN(newService.price) ? "" : newService.price}
-                        onChange={(e) =>
-                          setNewService({
-                            ...newService,
-                            price: parseFloat(e.target.value),
-                          })
-                        }
-                        className="bg-background/50"
-                      />
+                      <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Categoria</Label>
+                      <select
+                        value={newService.category}
+                        onChange={(e) => setNewService({ ...newService, category: e.target.value })}
+                        className="flex h-11 w-full rounded-xl border border-brand/10 bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus:border-brand focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <option value="hair">Capelli</option>
+                        <option value="beard">Barba</option>
+                        <option value="wellness">Benessere</option>
+                        <option value="other">Altro</option>
+                      </select>
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Categoria</Label>
-                    <select
-                      value={newService.category}
-                      onChange={(e) => setNewService({ ...newService, category: e.target.value })}
-                      className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    <div className="space-y-2">
+                      <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Icona Rappresentativa</Label>
+                      <div className="grid grid-cols-5 gap-2 bg-background/50 p-2.5 rounded-xl border border-brand/10">
+                        {availableIcons.map((icn) => {
+                          const Icon = icn.icon;
+                          const isSelected = newService.icon === icn.value;
+                          return (
+                            <button
+                              key={icn.value}
+                              type="button"
+                              onClick={() => setNewService({ ...newService, icon: icn.value })}
+                              className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg border transition-all duration-200 cursor-pointer ${
+                                isSelected
+                                  ? "border-brand bg-brand/10 text-brand shadow-sm scale-[1.05]"
+                                  : "border-transparent hover:bg-muted/10 text-muted-foreground hover:text-brand"
+                              }`}
+                              title={icn.label}
+                            >
+                              <Icon className="w-5 h-5 mb-1" />
+                              <span className="text-[9px] uppercase font-bold tracking-wider truncate w-full text-center">
+                                {icn.label}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full bg-brand hover:bg-brand-hover text-white rounded-xl h-11 font-bold shadow-md hover:shadow-brand/20 transition-all duration-200 cursor-pointer"
+                      disabled={loading}
                     >
-                      <option value="hair">Capelli</option>
-                      <option value="beard">Barba</option>
-                      <option value="wellness">Benessere</option>
-                      <option value="other">Altro</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Icona</Label>
-                    <div className="grid grid-cols-5 gap-2 bg-background/50 p-2 rounded-xl border border-input">
-                      {availableIcons.map((icn) => {
-                        const Icon = icn.icon;
-                        const isSelected = newService.icon === icn.value;
-                        return (
-                          <button
-                            key={icn.value}
-                            type="button"
-                            onClick={() => setNewService({ ...newService, icon: icn.value })}
-                            className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg border transition-all ${
-                              isSelected
-                                ? "border-brand bg-brand/10 text-brand shadow-sm"
-                                : "border-transparent hover:bg-muted/10 text-muted"
-                            }`}
-                            title={icn.label}
-                          >
-                            <Icon className="w-5 h-5 mb-1" />
-                            <span className="text-[9px] uppercase font-bold tracking-wider truncate w-full text-center">
-                              {icn.label}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full bg-brand hover:bg-brand-hover text-white rounded-xl"
-                    disabled={loading}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Aggiungi
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+                      {loading ? (
+                        "Elaborazione..."
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4 mr-2" />
+                          Aggiungi Servizio
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         )}
 
@@ -1577,186 +2118,472 @@ export function AdminDashboardClient({
         {/* Products Tab                                                        */}
         {/* ------------------------------------------------------------------ */}
         {activeTab === "products" && (
-          <div className="grid lg:grid-cols-3 gap-8">
-            <Card className="lg:col-span-2 glass-effect border-brand/10">
-              <CardHeader>
-                <CardTitle>Prodotti</CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                {/* Desktop View */}
-                <div className="hidden md:block overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <tbody className="divide-y divide-brand/10">
-                      {initialProducts.map((product) => (
-                        <tr
-                          key={product.id}
-                          className="hover:bg-brand/5 transition-colors"
-                        >
-                          <td className="p-4">
-                            <div className="font-bold">{product.name}</div>
-                            <div className="text-xs text-muted">
-                              {product.description}
-                            </div>
-                          </td>
-                          <td className="p-4 text-right">
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="text-red-500 hover:bg-red-50 hover:text-red-600"
-                              onClick={() => handleRemoveProduct(product.id)}
-                              disabled={loading}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+            {/* Dynamic Statistics for Products */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 select-none">
+              {/* Stat 1: Total Products */}
+              <div className="relative overflow-hidden rounded-2xl border border-brand/10 bg-surface/30 backdrop-blur-md p-5 shadow-lg group hover:border-brand/20 transition-all duration-300">
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 rounded-full bg-brand/5 blur-xl group-hover:bg-brand/10 transition-colors duration-300" />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground/80">Prodotti Totali</p>
+                    <h3 className="text-3xl font-black text-foreground tracking-tight">{totalProducts}</h3>
+                  </div>
+                  <div className="p-3 bg-brand/10 text-brand rounded-xl border border-brand/15 group-hover:scale-110 transition-transform duration-300">
+                    <ShoppingBag className="w-5 h-5 text-brand" />
+                  </div>
                 </div>
+                <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Sparkles className="w-3.5 h-3.5 text-brand animate-pulse" />
+                  <span>Prodotti registrati nel catalogo</span>
+                </div>
+              </div>
 
-                {/* Mobile Card View */}
-                <div className="block md:hidden divide-y divide-brand/10">
-                  {initialProducts.map((product) => (
-                    <div key={product.id} className="p-4 hover:bg-brand/5 transition-colors">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3">
+              {/* Stat 2: Average Price */}
+              <div className="relative overflow-hidden rounded-2xl border border-brand/10 bg-surface/30 backdrop-blur-md p-5 shadow-lg group hover:border-brand/20 transition-all duration-300">
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 rounded-full bg-brand/5 blur-xl group-hover:bg-brand/10 transition-colors duration-300" />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground/80">Prezzo Medio</p>
+                    <h3 className="text-3xl font-black text-foreground tracking-tight">
+                      €{(averageProductPrice / 100).toFixed(2)}
+                    </h3>
+                  </div>
+                  <div className="p-3 bg-brand/10 text-brand rounded-xl border border-brand/15 group-hover:scale-110 transition-transform duration-300">
+                    <Package className="w-5 h-5 text-brand" />
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Sparkles className="w-3.5 h-3.5 text-brand" />
+                  <span>Valore medio dell'assortimento</span>
+                </div>
+              </div>
+
+              {/* Stat 3: Stock Status */}
+              <div className="relative overflow-hidden rounded-2xl border border-brand/10 bg-surface/30 backdrop-blur-md p-5 shadow-lg group hover:border-brand/20 transition-all duration-300">
+                <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 rounded-full bg-brand/5 blur-xl group-hover:bg-brand/10 transition-colors duration-300" />
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground/80">Esauriti</p>
+                    <h3 className={`text-3xl font-black tracking-tight ${outOfStockProducts > 0 ? "text-amber-500" : "text-foreground"}`}>
+                      {outOfStockProducts}
+                    </h3>
+                  </div>
+                  <div className={`p-3 rounded-xl border transition-all duration-300 group-hover:scale-110 ${
+                    outOfStockProducts > 0 
+                      ? "bg-amber-500/10 text-amber-500 border-amber-500/15" 
+                      : "bg-brand/10 text-brand border-brand/15"
+                  }`}>
+                    <AlertTriangle className="w-5 h-5 text-brand" />
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <div className={`w-1.5 h-1.5 rounded-full ${outOfStockProducts > 0 ? "bg-amber-500 animate-pulse" : "bg-emerald-500"}`} />
+                  <span>
+                    {outOfStockProducts > 0 
+                      ? "Rifornimento consigliato per alcuni prodotti" 
+                      : "Tutti i prodotti sono disponibili"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Products content grid */}
+            <div className="grid lg:grid-cols-3 gap-8">
+              {/* Products List & Filters */}
+              <div className="lg:col-span-2 space-y-6">
+                {/* Search & Filters Controls */}
+                <Card className="glass-effect border-brand/10 shadow-lg rounded-2xl p-4 md:p-6">
+                  <div className="space-y-4">
+                    {/* Search & Sort Row */}
+                    <div className="flex flex-col md:flex-row md:items-center gap-4">
+                      {/* Search Input */}
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Cerca prodotti per nome o descrizione..."
+                          value={productSearch}
+                          onChange={(e) => setProductSearch(e.target.value)}
+                          className="pl-10 bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11 text-sm text-foreground"
+                        />
+                        {productSearch && (
+                          <button
+                            onClick={() => setProductSearch("")}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-brand"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Sort Selector */}
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider hidden md:inline">Ordina:</span>
+                        <select
+                          value={productSortOrder}
+                          onChange={(e) => setProductSortOrder(e.target.value as any)}
+                          className="flex h-11 w-full md:w-[180px] rounded-xl border border-brand/10 bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus:border-brand focus-visible:ring-brand text-foreground"
+                        >
+                          <option value="name-asc">Nome A-Z</option>
+                          <option value="name-desc">Nome Z-A</option>
+                          <option value="price-asc">Prezzo crescente</option>
+                          <option value="price-desc">Prezzo decrescente</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Category Filter Row */}
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground/80 flex items-center gap-1.5">
+                        <SlidersHorizontal className="w-3 h-3 text-brand" /> Categoria
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { value: "all", label: "Tutti" },
+                          { value: "hair", label: "Capelli" },
+                          { value: "beard", label: "Barba" },
+                          { value: "wellness", label: "Benessere" },
+                          { value: "merch", label: "Merch" },
+                          { value: "other", label: "Altro" },
+                        ].map((pill) => {
+                          const isSelected = productCategoryFilter === pill.value;
+                          return (
+                            <button
+                              key={pill.value}
+                              onClick={() => setProductCategoryFilter(pill.value as any)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-200 cursor-pointer ${
+                                isSelected
+                                  ? "bg-brand text-white shadow-md shadow-brand/20 border border-brand/10"
+                                  : "text-muted-foreground bg-muted/30 hover:bg-brand/5 hover:text-brand border border-transparent hover:border-brand/10"
+                              }`}
+                            >
+                              {pill.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Stock Availability Filter Row */}
+                    <div className="flex flex-col gap-2 border-t border-brand/5 pt-3">
+                      <span className="text-[10px] font-extrabold uppercase tracking-widest text-muted-foreground/80">
+                        Stato Magazzino
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[
+                          { value: "all", label: "Qualsiasi stato" },
+                          { value: "in_stock", label: "Disponibile" },
+                          { value: "out_of_stock", label: "Esaurito" },
+                        ].map((pill) => {
+                          const isSelected = productStockFilter === pill.value;
+                          return (
+                            <button
+                              key={pill.value}
+                              onClick={() => setProductStockFilter(pill.value as any)}
+                              className={`px-3.5 py-1.5 rounded-xl text-xs font-extrabold transition-all duration-200 cursor-pointer ${
+                                isSelected
+                                  ? "bg-brand text-white shadow-md border border-brand/10"
+                                  : "text-muted-foreground bg-muted/30 hover:bg-brand/5 hover:text-brand border border-transparent hover:border-brand/10"
+                              }`}
+                            >
+                              {pill.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+                
+                {/* Products Cards Grid */}
+                {filteredProducts.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    {filteredProducts.map((product) => (
+                      <Card
+                        key={product.id}
+                        className={`glass-effect border-brand/10 shadow-lg rounded-2xl overflow-hidden hover:border-brand/20 transition-all duration-300 flex flex-col group relative ${
+                          !product.inStock ? "opacity-75" : ""
+                        }`}
+                      >
+                        {/* Product Image Preview */}
+                        <div className="relative aspect-video w-full overflow-hidden bg-brand/5 border-b border-brand/5 shrink-0 select-none">
                           {product.image ? (
-                            <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-brand/10">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                            </div>
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={product.image}
+                              alt={product.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                            />
                           ) : (
-                            <div className="w-12 h-12 rounded-lg bg-brand/10 text-brand flex items-center justify-center shrink-0">
-                              <ShoppingBag className="w-5 h-5" />
+                            <div className="w-full h-full bg-gradient-to-br from-brand/5 to-brand/15 text-brand flex items-center justify-center">
+                              <Package className="w-10 h-10 opacity-30 group-hover:scale-110 transition-transform duration-500" />
                             </div>
                           )}
-                          <div>
-                            <div className="font-bold text-sm text-foreground">{product.name}</div>
-                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                              {product.description || "Nessuna descrizione"}
-                            </div>
-                            {product.category && (
-                              <span className="inline-block text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-brand/5 border border-brand/10 text-brand mt-1.5">
-                                {product.category === 'hair' ? 'Capelli' : product.category === 'beard' ? 'Barba' : product.category === 'wellness' ? 'Benessere' : product.category === 'merch' ? 'Merchandising' : product.category}
+                          
+                          {/* Stock Availability Badge */}
+                          <div className="absolute top-3 left-3 select-none">
+                            {product.inStock ? (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider uppercase bg-green-500/15 text-green-500 border border-green-500/20 backdrop-blur-md shadow-sm">
+                                Disponibile
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider uppercase bg-red-500/15 text-red-500 border border-red-500/20 backdrop-blur-md shadow-sm">
+                                Esaurito
                               </span>
                             )}
                           </div>
+
+                          {/* Floating Category Badge */}
+                          <div className="absolute top-3 right-3 select-none">
+                            <CategoryBadge category={product.category} />
+                          </div>
                         </div>
 
-                        <div className="flex flex-col items-end justify-center shrink-0">
+                        {/* Product Content Details */}
+                        <CardContent className="p-4 md:p-5 flex-1 flex flex-col justify-between space-y-4 text-foreground">
+                          <div className="space-y-1.5">
+                            <h4 className="font-extrabold text-foreground text-base tracking-tight leading-tight line-clamp-1">
+                              {product.name}
+                            </h4>
+                            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed min-h-[32px]">
+                              {product.description || "Nessuna descrizione specificata per questo prodotto premium."}
+                            </p>
+                          </div>
+
+                          {/* Price and Stock Toggle Control */}
+                          <div className="flex items-center justify-between border-t border-brand/5 pt-3">
+                            <div className="flex flex-col">
+                              <span className="text-[9px] uppercase font-extrabold tracking-widest text-muted-foreground/80">Prezzo</span>
+                              <span className="text-lg font-black text-brand bg-brand/5 border border-brand/10 px-2.5 py-0.5 rounded-xl mt-0.5 w-fit">
+                                €{(product.price / 100).toFixed(2)}
+                              </span>
+                            </div>
+
+                            {/* InStock quick toggle */}
+                            <div className="flex items-center gap-2 select-none">
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground/85">In Stock:</span>
+                              <button
+                                type="button"
+                                disabled={loading}
+                                onClick={() => handleToggleStock(product)}
+                                className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-all duration-300 cursor-pointer ${
+                                  product.inStock ? "bg-green-500 justify-end" : "bg-muted justify-start"
+                                }`}
+                              >
+                                <span className="bg-white w-4 h-4 rounded-full shadow-md shrink-0" />
+                              </button>
+                            </div>
+                          </div>
+                        </CardContent>
+
+                        {/* Card Hover Action Buttons overlay/footer */}
+                        <div className="border-t border-brand/10 p-3 bg-surface/50 backdrop-blur-md flex items-center justify-end gap-1.5 shrink-0">
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-red-500 border-red-200/50 hover:bg-red-50 hover:text-red-600 text-xs py-1 h-8 px-2 rounded-lg"
+                            onClick={() => setEditingProduct(product)}
+                            disabled={loading}
+                            className="text-blue-500 border-blue-200/30 hover:bg-blue-50 dark:hover:bg-blue-950/20 text-xs py-1 h-8 px-3 rounded-xl cursor-pointer"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 mr-1" />
+                            Modifica
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
                             onClick={() => handleRemoveProduct(product.id)}
                             disabled={loading}
+                            className="text-red-500 border-red-200/30 hover:bg-red-50 dark:hover:bg-red-950/20 text-xs py-1 h-8 px-3 rounded-xl cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5 mr-1" />
-                            Elimina
+                            Rimuovi
                           </Button>
                         </div>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  /* Empty Search State */
+                  <Card className="glass-effect border-brand/10 p-12 text-center flex flex-col items-center justify-center space-y-4">
+                    <div className="p-4 bg-brand/5 text-brand rounded-full">
+                      <ShoppingBag className="w-8 h-8 opacity-40 animate-pulse text-brand" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="font-extrabold text-foreground">Nessun prodotto trovato</h4>
+                      <p className="text-sm text-muted max-w-sm">
+                        Nessun articolo soddisfa i criteri selezionati. Modifica i filtri o la ricerca.
+                      </p>
+                    </div>
+                    {(productSearch || productCategoryFilter !== "all" || productStockFilter !== "all") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setProductSearch("");
+                          setProductCategoryFilter("all");
+                          setProductStockFilter("all");
+                        }}
+                        className="border-brand/20 text-brand rounded-xl mt-2 cursor-pointer"
+                      >
+                        Azzera Filtri
+                      </Button>
+                    )}
+                  </Card>
+                )}
+              </div>
+
+              {/* Form Nuovo Prodotto Column */}
+              <div className="lg:col-span-1">
+                <Card className="glass-effect border-brand/10 h-fit shadow-xl rounded-2xl overflow-hidden sticky top-8">
+                  <CardHeader className="border-b border-brand/10 bg-brand/5 p-5">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 bg-brand/10 text-brand rounded-xl border border-brand/15">
+                        <Plus className="w-5 h-5 animate-pulse text-brand" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-xl font-extrabold text-foreground">Nuovo Prodotto</CardTitle>
+                        <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                          Inserisci un nuovo articolo per la rivendita.
+                        </CardDescription>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                  </CardHeader>
+                  <CardContent className="p-5">
+                    <form onSubmit={handleAddProduct} className="space-y-4">
+                      {/* Name input */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Nome Prodotto</Label>
+                        <Input
+                          required
+                          placeholder="Es. Cera Capelli Opaca Alta Tenuta"
+                          value={newProduct.name}
+                          onChange={(e) =>
+                            setNewProduct({ ...newProduct, name: e.target.value })
+                          }
+                          className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11 text-foreground"
+                        />
+                      </div>
 
-            <Card className="glass-effect border-brand/10 h-fit">
-              <CardHeader>
-                <CardTitle>Nuovo Prodotto</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleAddProduct} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Nome</Label>
-                    <Input
-                      required
-                      value={newProduct.name}
-                      onChange={(e) =>
-                        setNewProduct({ ...newProduct, name: e.target.value })
-                      }
-                      className="bg-background/50"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Descrizione</Label>
-                    <Input
-                      value={newProduct.description}
-                      onChange={(e) =>
-                        setNewProduct({
-                          ...newProduct,
-                          description: e.target.value,
-                        })
-                      }
-                      className="bg-background/50"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Categoria</Label>
-                    <select
-                      value={newProduct.category}
-                      onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                      className="flex h-10 w-full rounded-md border border-input bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="hair">Capelli</option>
-                      <option value="beard">Barba</option>
-                      <option value="wellness">Benessere</option>
-                      <option value="merch">Merchandising</option>
-                      <option value="other">Altro</option>
-                    </select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Immagine (opzionale)</Label>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      ref={fileInputRef}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => {
-                            setNewProduct({ ...newProduct, image: reader.result as string });
-                          };
-                          reader.readAsDataURL(file);
-                        } else {
-                          setNewProduct({ ...newProduct, image: "" });
-                        }
-                      }}
-                      className="bg-background/50 cursor-pointer file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand/10 file:text-brand hover:file:bg-brand/20"
-                    />
-                    {newProduct.image && (
-                      <div className="mt-2 w-20 h-20 rounded-lg overflow-hidden border border-brand/20 relative group">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={newProduct.image} alt="Preview" className="object-cover w-full h-full group-hover:opacity-50 transition-opacity" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNewProduct({ ...newProduct, image: "" });
-                            if (fileInputRef.current) {
-                              fileInputRef.current.value = "";
+                      {/* Description input */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Descrizione</Label>
+                        <Input
+                          placeholder="Es. Finish asciutto, formula a base d'acqua..."
+                          value={newProduct.description || ""}
+                          onChange={(e) =>
+                            setNewProduct({
+                              ...newProduct,
+                              description: e.target.value,
+                            })
+                          }
+                          className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11 text-foreground"
+                        />
+                      </div>
+
+                      {/* Price & Category Grid */}
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Price input */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Prezzo (€)</Label>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-bold">€</span>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              required
+                              placeholder="19.90"
+                              value={newProduct.price || ""}
+                              onChange={(e) =>
+                                setNewProduct({
+                                  ...newProduct,
+                                  price: parseFloat(e.target.value) || 0,
+                                })
+                              }
+                              className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11 pl-7 text-foreground"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Category Selector */}
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Categoria</Label>
+                          <select
+                            value={newProduct.category}
+                            onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
+                            className="flex h-11 w-full rounded-xl border border-brand/10 bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus:border-brand focus-visible:ring-brand text-foreground"
+                          >
+                            <option value="hair">Capelli</option>
+                            <option value="beard">Barba</option>
+                            <option value="wellness">Benessere</option>
+                            <option value="merch">Merchandising</option>
+                            <option value="other">Altro</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Image Upload Input */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs font-extrabold uppercase tracking-wider text-muted-foreground/80">Foto Prodotto (opzionale)</Label>
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          ref={fileInputRef}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setNewProduct({ ...newProduct, image: reader.result as string });
+                              };
+                              reader.readAsDataURL(file);
+                            } else {
+                              setNewProduct({ ...newProduct, image: "" });
                             }
                           }}
-                          className="absolute inset-0 m-auto w-8 h-8 flex items-center justify-center bg-background/80 text-foreground hover:text-brand hover:bg-background rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm shadow-sm border border-brand/10"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                          className="bg-background/50 border-brand/10 focus-visible:ring-brand rounded-xl h-11 cursor-pointer file:mr-4 file:py-1 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-brand/10 file:text-brand hover:file:bg-brand/20"
+                        />
+                        
+                        {/* Selected image preview */}
+                        {newProduct.image && (
+                          <div className="mt-2.5 w-20 h-20 rounded-lg overflow-hidden border border-brand/20 relative group">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={newProduct.image} alt="Preview" className="object-cover w-full h-full group-hover:opacity-50 transition-opacity" />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setNewProduct({ ...newProduct, image: "" });
+                                if (fileInputRef.current) {
+                                  fileInputRef.current.value = "";
+                                }
+                              }}
+                              className="absolute inset-0 m-auto w-8 h-8 flex items-center justify-center bg-background/80 text-foreground hover:text-brand hover:bg-background rounded-full opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm shadow-sm border border-brand/10"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full bg-brand hover:bg-brand-hover text-white rounded-xl"
-                    disabled={loading}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Aggiungi
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+
+                      {/* Submit button */}
+                      <Button
+                        type="submit"
+                        className="w-full bg-brand hover:bg-brand-hover text-white rounded-xl h-11 font-bold shadow-md hover:shadow-brand/20 transition-all duration-200 cursor-pointer mt-2"
+                        disabled={loading}
+                      >
+                        {loading ? (
+                          "Elaborazione..."
+                        ) : (
+                          <>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Crea Prodotto
+                          </>
+                        )}
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </div>
         )}
       </div>
