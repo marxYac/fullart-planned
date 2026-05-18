@@ -87,7 +87,6 @@ export default function BookAppointmentPage() {
   const [dbAppointments, setDbAppointments] = useState<any[]>([]);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-  const [activePeriod, setActivePeriod] = useState<"morning" | "afternoon" | "evening">("morning");
   
   const [bookingData, setBookingData] = useState<{
     service: any;
@@ -490,7 +489,7 @@ export default function BookAppointmentPage() {
                                 aria-pressed={isSelected}
                                 className={`
                                   aspect-square flex items-center justify-center rounded-2xl text-sm font-bold transition-all
-                                  ${isDisabled ? 'text-muted/30 cursor-not-allowed' : 'hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand'}
+                                  ${isDisabled ? 'text-muted-foreground/40 cursor-not-allowed' : 'hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand'}
                                   ${isSelected ? 'bg-brand text-white hover:bg-brand hover:text-white' : ''}
                                   ${isToday && !isSelected ? 'border border-brand/30 text-brand' : ''}
                                 `}
@@ -526,25 +525,6 @@ export default function BookAppointmentPage() {
                           </h3>
                         </div>
 
-                        {/* Period Selector Tabs */}
-                        <div className="flex gap-2 p-1.5 bg-muted/20 border border-brand/5 rounded-2xl mb-8">
-                          {[
-                            { id: "morning", label: "🌅 Mattina", desc: "08:30 - 12:30" },
-                            { id: "afternoon", label: "☀️ Pomeriggio", desc: "13:00 - 17:30" },
-                            { id: "evening", label: "🌙 Sera", desc: "18:00 - 19:30" }
-                          ].map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => setActivePeriod(p.id as any)}
-                              className={`flex-1 flex flex-col items-center py-2.5 rounded-xl transition-all select-none cursor-pointer ${activePeriod === p.id ? 'bg-brand text-white shadow-lg shadow-brand/20' : 'hover:bg-brand/5 text-muted-foreground'}`}
-                            >
-                              <span className="text-sm font-bold">{p.label}</span>
-                              <span className={`text-[9px] font-medium tracking-tight mt-0.5 ${activePeriod === p.id ? 'text-white/80' : 'text-muted-foreground/60'}`}>{p.desc}</span>
-                            </button>
-                          ))}
-                        </div>
-
                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
                           {isLoadingSlots ? (
                             <div className="col-span-full text-center text-muted py-8 animate-pulse">
@@ -553,23 +533,16 @@ export default function BookAppointmentPage() {
                           ) : (
                             (() => {
                               const allSlots = ['08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '12:00', '12:30', '13:00', '13:30', '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00', '17:30', '18:00', '18:30', '19:00', '19:30'];
-                              const filteredSlots = allSlots.filter((t) => {
-                                const [hours] = t.split(':').map(Number);
-                                if (activePeriod === "morning") return hours < 13;
-                                if (activePeriod === "afternoon") return hours >= 13 && hours < 18;
-                                if (activePeriod === "evening") return hours >= 18;
-                                return true;
-                              });
 
-                              if (filteredSlots.length === 0) {
+                              if (allSlots.length === 0) {
                                 return (
                                   <div className="col-span-full text-center text-muted py-8">
-                                    Nessun orario disponibile per questa fascia oraria.
+                                    Nessun orario disponibile.
                                   </div>
                                 );
                               }
 
-                              return filteredSlots.map((t) => {
+                              return allSlots.map((t) => {
                                 const serviceDuration = bookingData.service?.duration || 30;
                                 const [hours, minutes] = t.split(':').map(Number);
                                 const startTimeInMinutes = hours * 60 + minutes;
