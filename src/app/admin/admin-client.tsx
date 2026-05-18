@@ -611,52 +611,52 @@ export function AdminDashboardClient({
       </Dialog>
 
       {/* Tabs Navigation */}
-      <div className="flex p-1 bg-surface rounded-2xl border border-brand/10 w-fit overflow-x-auto max-w-full">
+      <div className={`grid ${currentUserRole === 'operator' ? 'grid-cols-1' : 'grid-cols-2 sm:flex'} p-1 bg-surface rounded-2xl border border-brand/10 w-full sm:w-fit gap-1 sm:gap-0`}>
         <button
           onClick={() => setActiveTab("appointments")}
-          className={`flex whitespace-nowrap items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${
+          className={`flex whitespace-nowrap items-center justify-center gap-2 px-3 py-2.5 sm:px-6 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all w-full sm:w-auto ${
             activeTab === "appointments"
               ? "bg-brand text-white shadow-lg shadow-brand/20"
               : "hover:bg-brand/5 text-muted hover:text-brand"
           }`}
         >
-          <CalendarIcon className="w-4 h-4" />
-          Appuntamenti
+          <CalendarIcon className="w-4 h-4 shrink-0" />
+          <span>Appuntamenti</span>
         </button>
         {currentUserRole !== "operator" && (
           <>
             <button
               onClick={() => setActiveTab("users")}
-              className={`flex whitespace-nowrap items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${
+              className={`flex whitespace-nowrap items-center justify-center gap-2 px-3 py-2.5 sm:px-6 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all w-full sm:w-auto ${
                 activeTab === "users"
                   ? "bg-brand text-white shadow-lg shadow-brand/20"
                   : "hover:bg-brand/5 text-muted hover:text-brand"
               }`}
             >
-              <Users className="w-4 h-4" />
-              Utenti
+              <Users className="w-4 h-4 shrink-0" />
+              <span>Utenti</span>
             </button>
             <button
               onClick={() => setActiveTab("services")}
-              className={`flex whitespace-nowrap items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${
+              className={`flex whitespace-nowrap items-center justify-center gap-2 px-3 py-2.5 sm:px-6 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all w-full sm:w-auto ${
                 activeTab === "services"
                   ? "bg-brand text-white shadow-lg shadow-brand/20"
                   : "hover:bg-brand/5 text-muted hover:text-brand"
               }`}
             >
-              <Scissors className="w-4 h-4" />
-              Servizi
+              <Scissors className="w-4 h-4 shrink-0" />
+              <span>Servizi</span>
             </button>
             <button
               onClick={() => setActiveTab("products")}
-              className={`flex whitespace-nowrap items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${
+              className={`flex whitespace-nowrap items-center justify-center gap-2 px-3 py-2.5 sm:px-6 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all w-full sm:w-auto ${
                 activeTab === "products"
                   ? "bg-brand text-white shadow-lg shadow-brand/20"
                   : "hover:bg-brand/5 text-muted hover:text-brand"
               }`}
             >
-              <ShoppingBag className="w-4 h-4" />
-              Prodotti
+              <ShoppingBag className="w-4 h-4 shrink-0" />
+              <span>Prodotti</span>
             </button>
           </>
         )}
