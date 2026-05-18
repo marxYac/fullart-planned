@@ -108,6 +108,8 @@ type DashboardProduct = {
   name: string;
   description: string | null;
   price: number;
+  image: string | null;
+  category: string | null;
 };
 
 type ActionType = "promote_operator" | "promote_admin" | "rollback" | "delete";
@@ -611,52 +613,56 @@ export function AdminDashboardClient({
       </Dialog>
 
       {/* Tabs Navigation */}
-      <div className={`grid ${currentUserRole === 'operator' ? 'grid-cols-1' : 'grid-cols-2 sm:flex'} p-1 bg-surface rounded-2xl border border-brand/10 w-full sm:w-fit gap-1 sm:gap-0`}>
+      <div className="flex p-1.5 bg-surface/30 backdrop-blur-md rounded-2xl border border-brand/10 w-fit overflow-x-auto max-w-full gap-1.5 scrollbar-none select-none animate-in fade-in slide-in-from-top-4 duration-300">
         <button
           onClick={() => setActiveTab("appointments")}
-          className={`flex whitespace-nowrap items-center justify-center gap-2 px-3 py-2.5 sm:px-6 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all w-full sm:w-auto ${
+          className={`flex whitespace-nowrap items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-extrabold transition-all duration-300 cursor-pointer ${
             activeTab === "appointments"
-              ? "bg-brand text-white shadow-lg shadow-brand/20"
-              : "hover:bg-brand/5 text-muted hover:text-brand"
+              ? "bg-gradient-to-r from-brand to-brand-hover text-white shadow-[0_8px_20px_-6px_rgba(221,24,59,0.4)] border border-brand/20 scale-[1.02]"
+              : "text-muted-foreground hover:text-brand bg-transparent hover:bg-brand/5 border border-transparent hover:border-brand/10 hover:scale-[1.01]"
           }`}
         >
-          <CalendarIcon className="w-4 h-4 shrink-0" />
+          <CalendarIcon className={`w-4 h-4 transition-transform duration-300 ${activeTab === "appointments" ? "scale-110 rotate-3 text-white" : "text-brand"}`} />
           <span>Appuntamenti</span>
+          <span className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${activeTab === "appointments" ? "bg-white scale-100" : "bg-transparent scale-0"}`} />
         </button>
         {currentUserRole !== "operator" && (
           <>
             <button
               onClick={() => setActiveTab("users")}
-              className={`flex whitespace-nowrap items-center justify-center gap-2 px-3 py-2.5 sm:px-6 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all w-full sm:w-auto ${
+              className={`flex whitespace-nowrap items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-extrabold transition-all duration-300 cursor-pointer ${
                 activeTab === "users"
-                  ? "bg-brand text-white shadow-lg shadow-brand/20"
-                  : "hover:bg-brand/5 text-muted hover:text-brand"
+                  ? "bg-gradient-to-r from-brand to-brand-hover text-white shadow-[0_8px_20px_-6px_rgba(221,24,59,0.4)] border border-brand/20 scale-[1.02]"
+                  : "text-muted-foreground hover:text-brand bg-transparent hover:bg-brand/5 border border-transparent hover:border-brand/10 hover:scale-[1.01]"
               }`}
             >
-              <Users className="w-4 h-4 shrink-0" />
+              <Users className={`w-4 h-4 transition-transform duration-300 ${activeTab === "users" ? "scale-110 rotate-3 text-white" : "text-brand"}`} />
               <span>Utenti</span>
+              <span className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${activeTab === "users" ? "bg-white scale-100" : "bg-transparent scale-0"}`} />
             </button>
             <button
               onClick={() => setActiveTab("services")}
-              className={`flex whitespace-nowrap items-center justify-center gap-2 px-3 py-2.5 sm:px-6 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all w-full sm:w-auto ${
+              className={`flex whitespace-nowrap items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-extrabold transition-all duration-300 cursor-pointer ${
                 activeTab === "services"
-                  ? "bg-brand text-white shadow-lg shadow-brand/20"
-                  : "hover:bg-brand/5 text-muted hover:text-brand"
+                  ? "bg-gradient-to-r from-brand to-brand-hover text-white shadow-[0_8px_20px_-6px_rgba(221,24,59,0.4)] border border-brand/20 scale-[1.02]"
+                  : "text-muted-foreground hover:text-brand bg-transparent hover:bg-brand/5 border border-transparent hover:border-brand/10 hover:scale-[1.01]"
               }`}
             >
-              <Scissors className="w-4 h-4 shrink-0" />
+              <Scissors className={`w-4 h-4 transition-transform duration-300 ${activeTab === "services" ? "scale-110 rotate-3 text-white" : "text-brand"}`} />
               <span>Servizi</span>
+              <span className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${activeTab === "services" ? "bg-white scale-100" : "bg-transparent scale-0"}`} />
             </button>
             <button
               onClick={() => setActiveTab("products")}
-              className={`flex whitespace-nowrap items-center justify-center gap-2 px-3 py-2.5 sm:px-6 sm:py-3 rounded-xl text-xs sm:text-sm font-bold transition-all w-full sm:w-auto ${
+              className={`flex whitespace-nowrap items-center gap-2.5 px-6 py-3 rounded-xl text-sm font-extrabold transition-all duration-300 cursor-pointer ${
                 activeTab === "products"
-                  ? "bg-brand text-white shadow-lg shadow-brand/20"
-                  : "hover:bg-brand/5 text-muted hover:text-brand"
+                  ? "bg-gradient-to-r from-brand to-brand-hover text-white shadow-[0_8px_20px_-6px_rgba(221,24,59,0.4)] border border-brand/20 scale-[1.02]"
+                  : "text-muted-foreground hover:text-brand bg-transparent hover:bg-brand/5 border border-transparent hover:border-brand/10 hover:scale-[1.01]"
               }`}
             >
-              <ShoppingBag className="w-4 h-4 shrink-0" />
+              <ShoppingBag className={`w-4 h-4 transition-transform duration-300 ${activeTab === "products" ? "scale-110 rotate-3 text-white" : "text-brand"}`} />
               <span>Prodotti</span>
+              <span className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${activeTab === "products" ? "bg-white scale-100" : "bg-transparent scale-0"}`} />
             </button>
           </>
         )}
@@ -682,11 +688,11 @@ export function AdminDashboardClient({
                 </CardDescription>
               </div>
 
-              {/* Action toolbar — shown when a user is selected */}
+              {/* Action toolbar — shown when a user is selected (Desktop only) */}
               {selectedUser && (() => {
                 const allowedActions = getAllowedActions(currentUserRole, selectedUser);
                 return (
-                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand/10 bg-background/70 p-2">
+                  <div className="hidden md:flex flex-wrap items-center gap-2 rounded-xl border border-brand/10 bg-background/70 p-2">
                     <span className="inline-flex items-center gap-2 text-sm text-muted mr-2">
                       <CheckSquare className="w-4 h-4 text-brand" />
                       {selectedUser.name || selectedUser.email}
@@ -749,7 +755,8 @@ export function AdminDashboardClient({
             </CardHeader>
 
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-brand/5 text-xs uppercase tracking-widest font-bold">
@@ -769,7 +776,7 @@ export function AdminDashboardClient({
                       const isSelected = selectedUserId === user.clerkId;
                       const isSelf = user.clerkId === currentUserId;
 
-                      // Rows that are visible but disabled (e.g. admin sees other admins/super_user as greyed-out)
+                      // Rows that are visible but disabled
                       const isDisabledRow =
                         !selectable &&
                         !isSelf &&
@@ -842,6 +849,140 @@ export function AdminDashboardClient({
                   </tbody>
                 </table>
               </div>
+
+              {/* Mobile List View */}
+              <div className="block md:hidden divide-y divide-brand/10">
+                {initialUsers.map((user) => {
+                  const selectable = isRowSelectable(
+                    currentUserRole,
+                    user,
+                    currentUserId
+                  );
+                  const isSelected = selectedUserId === user.clerkId;
+                  const isSelf = user.clerkId === currentUserId;
+
+                  const isDisabledRow =
+                    !selectable &&
+                    !isSelf &&
+                    user.role !== "super_user";
+
+                  const allowedActions = getAllowedActions(currentUserRole, user);
+
+                  return (
+                    <div
+                      key={user.id}
+                      onClick={() => {
+                        if (!selectable) return;
+                        setSelectedUserId((cur) =>
+                          cur === user.clerkId ? null : user.clerkId
+                        );
+                      }}
+                      className={`p-4 transition-all ${
+                        selectable ? "cursor-pointer hover:bg-brand/5" : "cursor-default"
+                      } ${isSelected ? "bg-brand/5 border-l-2 border-brand" : ""} ${
+                        isDisabledRow ? "opacity-40" : ""
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          {/* Selection indicator */}
+                          {selectable && (
+                            <div
+                              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-all duration-200 ${
+                                isSelected ? "border-brand bg-transparent" : "border-muted-foreground/30 bg-transparent"
+                              }`}
+                            >
+                              <div
+                                className={`h-2.5 w-2.5 rounded-full bg-brand transition-all duration-200 ${
+                                  isSelected ? "scale-100 opacity-100" : "scale-50 opacity-0"
+                                }`}
+                              />
+                            </div>
+                          )}
+                          
+                          {/* User Avatar Initials */}
+                          <div className="w-9 h-9 rounded-full bg-brand/10 text-brand flex items-center justify-center font-bold text-sm shrink-0">
+                            {user.name ? user.name.slice(0, 2).toUpperCase() : <User className="w-4 h-4" />}
+                          </div>
+
+                          <div>
+                            <div className="font-bold text-sm text-foreground flex items-center gap-1.5 flex-wrap">
+                              {user.name || "N/A"}
+                              {isSelf && (
+                                <span className="text-[10px] text-brand font-bold bg-brand/10 px-1.5 py-0.5 rounded">
+                                  Tu
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground break-all">{user.email}</div>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          <RoleBadge role={user.role} />
+                        </div>
+                      </div>
+
+                      {/* Expandable actions inline on mobile when selected */}
+                      {isSelected && allowedActions.length > 0 && (
+                        <div className="mt-4 pt-3 border-t border-brand/10 flex flex-wrap gap-2 animate-in slide-in-from-top-2 duration-200" onClick={(e) => e.stopPropagation()}>
+                          {allowedActions.includes("promote_operator") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => requestAction("promote_operator", user)}
+                              disabled={loading}
+                              className="border-brand/20 text-brand hover:bg-brand hover:text-white text-xs h-8 px-3"
+                            >
+                              <UserPlus className="w-3.5 h-3.5 mr-1" />
+                              Rendi Operatore
+                            </Button>
+                          )}
+
+                          {allowedActions.includes("promote_admin") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => requestAction("promote_admin", user)}
+                              disabled={loading}
+                              className="border-purple-400/30 text-purple-600 hover:bg-purple-600 hover:text-white text-xs h-8 px-3"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 mr-1" />
+                              Rendi Admin
+                            </Button>
+                          )}
+
+                          {allowedActions.includes("rollback") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => requestAction("rollback", user)}
+                              disabled={loading}
+                              className="border-yellow-500/20 text-yellow-600 hover:bg-yellow-500 hover:text-white text-xs h-8 px-3"
+                            >
+                              <UserMinus className="w-3.5 h-3.5 mr-1" />
+                              Rendi Cliente
+                            </Button>
+                          )}
+
+                          {allowedActions.includes("delete") && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => requestAction("delete", user)}
+                              disabled={loading}
+                              className="bg-red-500 hover:bg-red-600 text-white text-xs h-8 px-3"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-1" />
+                              Elimina
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         )}
@@ -856,7 +997,8 @@ export function AdminDashboardClient({
                 <CardTitle>Servizi Attivi</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                {/* Desktop View */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <tbody className="divide-y divide-brand/10">
                       {initialServices.map((service) => {
@@ -921,6 +1063,71 @@ export function AdminDashboardClient({
                       })}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile Grid/List View */}
+                <div className="block md:hidden divide-y divide-brand/10">
+                  {initialServices.map((service) => {
+                    const iconData = availableIcons.find((i) => i.value === service.icon);
+                    const Icon = iconData ? iconData.icon : Scissors;
+
+                    return (
+                      <div key={service.id} className="p-4 hover:bg-brand/5 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2.5 bg-brand/10 text-brand rounded-xl shrink-0">
+                              <Icon className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="font-bold text-sm flex items-center gap-2 flex-wrap">
+                                {service.name}
+                                {service.category && (
+                                  <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-surface text-muted border border-border">
+                                    {service.category === 'hair' ? 'Capelli' : service.category === 'beard' ? 'Barba' : service.category === 'wellness' ? 'Benessere' : service.category}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                {service.description || "Nessuna descrizione"}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col items-end shrink-0 gap-1">
+                            <div className="text-sm font-bold text-brand">
+                              €{(service.price / 100).toFixed(2)}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground font-medium">
+                              {service.duration} min
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-end gap-2 border-t border-brand/5 pt-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-blue-500 border-blue-200/50 hover:bg-blue-50 hover:text-blue-600 text-xs py-1 h-8 rounded-lg"
+                            onClick={() => setEditingService(service)}
+                            disabled={loading}
+                          >
+                            <Edit2 className="w-3.5 h-3.5 mr-1" />
+                            Modifica
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-500 border-red-200/50 hover:bg-red-50 hover:text-red-600 text-xs py-1 h-8 rounded-lg"
+                            onClick={() => handleRemoveService(service.id)}
+                            disabled={loading}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-1" />
+                            Elimina
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -1052,7 +1259,8 @@ export function AdminDashboardClient({
                 <CardTitle>Prodotti</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
+                {/* Desktop View */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <tbody className="divide-y divide-brand/10">
                       {initialProducts.map((product) => (
@@ -1065,9 +1273,6 @@ export function AdminDashboardClient({
                             <div className="text-xs text-muted">
                               {product.description}
                             </div>
-                          </td>
-                          <td className="p-4 text-sm font-bold text-brand">
-                            €{(product.price / 100).toFixed(2)}
                           </td>
                           <td className="p-4 text-right">
                             <Button
@@ -1084,6 +1289,52 @@ export function AdminDashboardClient({
                       ))}
                     </tbody>
                   </table>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="block md:hidden divide-y divide-brand/10">
+                  {initialProducts.map((product) => (
+                    <div key={product.id} className="p-4 hover:bg-brand/5 transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                          {product.image ? (
+                            <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0 border border-brand/10">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-brand/10 text-brand flex items-center justify-center shrink-0">
+                              <ShoppingBag className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-bold text-sm text-foreground">{product.name}</div>
+                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                              {product.description || "Nessuna descrizione"}
+                            </div>
+                            {product.category && (
+                              <span className="inline-block text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-brand/5 border border-brand/10 text-brand mt-1.5">
+                                {product.category === 'hair' ? 'Capelli' : product.category === 'beard' ? 'Barba' : product.category === 'wellness' ? 'Benessere' : product.category === 'merch' ? 'Merchandising' : product.category}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end justify-center shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-500 border-red-200/50 hover:bg-red-50 hover:text-red-600 text-xs py-1 h-8 px-2 rounded-lg"
+                            onClick={() => handleRemoveProduct(product.id)}
+                            disabled={loading}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-1" />
+                            Elimina
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>
@@ -1113,22 +1364,6 @@ export function AdminDashboardClient({
                         setNewProduct({
                           ...newProduct,
                           description: e.target.value,
-                        })
-                      }
-                      className="bg-background/50"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Prezzo (€)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={Number.isNaN(newProduct.price) ? "" : newProduct.price}
-                      onChange={(e) =>
-                        setNewProduct({
-                          ...newProduct,
-                          price: parseFloat(e.target.value),
                         })
                       }
                       className="bg-background/50"

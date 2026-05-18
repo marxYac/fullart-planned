@@ -90,6 +90,7 @@ export function AppointmentsTab({ currentUserRole, currentUserId }: Appointments
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [operatorIdFilter, setOperatorIdFilter] = useState<string>("all");
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [page, setPage] = useState(1);
   const limit = 10;
 
@@ -170,6 +171,14 @@ export function AppointmentsTab({ currentUserRole, currentUserId }: Appointments
     }
   };
 
+  const activeFiltersCount = [
+    dateFrom !== todayStr,
+    dateTo !== todayStr,
+    statusFilter !== "all",
+    search !== "",
+    isAdmin && operatorIdFilter !== "all"
+  ].filter(Boolean).length;
+
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       
@@ -190,13 +199,23 @@ export function AppointmentsTab({ currentUserRole, currentUserId }: Appointments
               </CardDescription>
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 justify-between md:justify-end w-full md:w-auto">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowMobileFilters(!showMobileFilters)}
+                className="md:hidden border-brand/20 text-brand hover:bg-brand/10"
+              >
+                <Filter className="w-4 h-4 mr-2" />
+                Filtri {activeFiltersCount > 0 && `(${activeFiltersCount})`}
+              </Button>
+
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={fetchAppointments}
                 disabled={loading}
-                className="border-brand/20 text-brand hover:bg-brand/10"
+                className="border-brand/20 text-brand hover:bg-brand/10 shrink-0"
               >
                 <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                 Aggiorna
@@ -204,7 +223,7 @@ export function AppointmentsTab({ currentUserRole, currentUserId }: Appointments
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-4 sm:p-6">
+        <CardContent className={`p-4 sm:p-6 ${showMobileFilters ? 'block' : 'hidden md:block'}`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             
             {/* Date Range */}
@@ -283,7 +302,8 @@ export function AppointmentsTab({ currentUserRole, currentUserId }: Appointments
 
       {/* Table Section */}
       <Card className="glass-effect border-brand/10 overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Desktop View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-brand/5 text-[10px] uppercase tracking-widest font-bold text-muted border-b border-brand/10">
@@ -395,6 +415,112 @@ export function AppointmentsTab({ currentUserRole, currentUserId }: Appointments
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile List View */}
+        <div className="block md:hidden divide-y divide-brand/10">
+          {loading && appointments.length === 0 ? (
+            <div className="p-8 text-center text-muted">
+              <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-brand" />
+              Caricamento appuntamenti...
+            </div>
+          ) : appointments.length === 0 ? (
+            <div className="p-8 text-center text-muted">
+              <CalendarIcon className="w-10 h-10 mx-auto mb-3 opacity-20" />
+              <p>Nessun appuntamento trovato per i filtri selezionati.</p>
+              <Button 
+                variant="link" 
+                onClick={() => {
+                  setDateFrom(""); setDateTo(""); setStatusFilter("all"); setSearch(""); setOperatorIdFilter("all"); setPage(1);
+                }}
+                className="text-brand mt-2"
+              >
+                Resetta Filtri
+              </Button>
+            </div>
+          ) : (
+            appointments.map((appt) => {
+              const statusInfo = statusMap[appt.status] || statusMap.pending;
+              const StatusIcon = statusInfo.icon;
+              const dateObj = new Date(appt.appointmentDate);
+              
+              return (
+                <div 
+                  key={appt.id} 
+                  className="p-4 hover:bg-brand/5 transition-colors cursor-pointer"
+                  onClick={() => setSelectedAppt(appt)}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    {/* Date Block & Client Details */}
+                    <div className="flex gap-3">
+                      {/* Left: Date Block */}
+                      <div className="w-11 h-11 rounded-xl bg-brand/5 flex flex-col items-center justify-center border border-brand/10 shrink-0">
+                        <span className="text-[9px] font-bold text-brand uppercase leading-none mb-0.5">
+                          {new Intl.DateTimeFormat("it-IT", { month: "short" }).format(dateObj)}
+                        </span>
+                        <span className="text-base font-black leading-none">
+                          {new Intl.DateTimeFormat("it-IT", { day: "2-digit" }).format(dateObj)}
+                        </span>
+                      </div>
+
+                      {/* Right: Client and Date Meta */}
+                      <div>
+                        <div className="text-xs font-semibold text-brand">
+                          {new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" }).format(dateObj)}
+                        </div>
+                        <div className="font-bold text-sm mt-0.5 text-foreground">
+                          {appt.user?.name || "Cliente Sconosciuto"}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate max-w-[200px] mt-0.5">
+                          {appt.user?.email}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Status badge */}
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase border shrink-0 ${statusInfo.color}`}>
+                      <StatusIcon className="w-2.5 h-2.5" />
+                      {statusInfo.label}
+                    </span>
+                  </div>
+
+                  {/* Middle Row: Service information & Operator */}
+                  <div className="mt-3 bg-brand/5 border border-brand/10 rounded-xl p-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div>
+                      <span className="font-bold text-foreground">{appt.service?.name || "Servizio rimosso"}</span>
+                      <span className="text-muted-foreground ml-1">({appt.service?.duration || 0} min)</span>
+                    </div>
+
+                    {isAdmin && appt.operator && (
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <User className="w-3.5 h-3.5 text-brand" />
+                        <span>Op: <strong className="text-foreground">{appt.operator.name || appt.operator.email}</strong></span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bottom Row: Actions Trigger */}
+                  <div className="mt-3 flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">
+                      Creato il {new Intl.DateTimeFormat("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(appt.createdAt))}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-brand/20 text-brand hover:bg-brand hover:text-white text-xs py-1 h-8 rounded-lg"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedAppt(appt);
+                      }}
+                    >
+                      <Eye className="w-3.5 h-3.5 mr-1" />
+                      Dettagli
+                    </Button>
+                  </div>
+                </div>
+              )
+            })
+          )}
         </div>
         
         {/* Pagination */}
