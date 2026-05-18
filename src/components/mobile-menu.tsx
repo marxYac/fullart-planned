@@ -12,6 +12,7 @@ const menuLinks = [
   { href: "/wellness", label: "Wellness" },
   { href: "/products", label: "Products" },
   { href: "/book-appointment", label: "Prenotazioni" },
+  { href: "/appointments", label: "I miei appuntamenti" },
 ];
 
 export function MobileMenu() {

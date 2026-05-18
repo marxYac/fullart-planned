@@ -48,8 +48,17 @@ export function ProductsClient({ products }: { products: Product[] }) {
           <Link href="/" className="site-brand text-brand">
             FULLART
           </Link>
+          
+          <div className="hidden lg:flex items-center gap-8 text-sm font-medium">
+            <Link href="/wellness" className="hover:text-brand transition-colors">Wellness</Link>
+            <Link href="/products" className="hover:text-brand transition-colors font-bold text-brand">Products</Link>
+            <Link href="/appointments" className="hover:text-brand transition-colors">I miei appuntamenti</Link>
+            {canAccessDashboard && (
+              <Link href="/admin" className="hover:text-brand transition-colors font-bold text-brand">Dashboard</Link>
+            )}
+          </div>
+
           <div className="nav-actions">
-            <span className="hidden lg:inline text-[10px] font-bold text-muted tracking-[0.2em] uppercase mr-2">Prodotti / Premium Collection</span>
             <ModeToggle />
 
             {isLoaded && !isSignedIn && (

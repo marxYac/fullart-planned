@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 
 import { ModeToggle } from "@/components/mode-toggle";
-
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { 
   getServices, 
@@ -77,14 +77,13 @@ const serviceIcons: Record<string, React.ReactNode> = {
 
 export default function BookAppointmentPage() {
   const { isSignedIn, isLoaded, user } = useUser();
+  const router = useRouter();
   const role = user?.publicMetadata?.role as string | undefined;
   const canAccessDashboard = role === "admin" || role === "super_user" || role === "operator";
-  const [view, setView] = useState("booking"); // "booking" or "appointments"
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dbServices, setDbServices] = useState<any[]>([]);
   const [dbOperators, setDbOperators] = useState<any[]>([]);
-  const [dbAppointments, setDbAppointments] = useState<any[]>([]);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   
@@ -108,21 +107,72 @@ export default function BookAppointmentPage() {
       
       const operatorsRes = await getOperators();
       if (operatorsRes.success) setDbOperators(operatorsRes.data ?? []);
-      
-      const appointmentsRes = await getUserAppointments();
-      if (appointmentsRes.success) setDbAppointments(appointmentsRes.data ?? []);
     }
     loadData();
-  }, [view]);
-
-  // Gestione deep-linking dei parametri URL per mobile bottom tab bar
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const viewParam = params.get("view");
-    if (viewParam === "appointments") {
-      setView("appointments");
-    }
   }, []);
+
+  // Ripristina e invia la prenotazione salvata dopo il login
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user) return;
+
+    const pendingJson = localStorage.getItem("pendingBooking");
+    if (!pendingJson) return;
+
+    localStorage.removeItem("pendingBooking"); // Rimuoviamo subito per evitare loop in caso di errori
+
+    try {
+      const pending = JSON.parse(pendingJson);
+      if (pending.service && pending.operator && pending.date && pending.time) {
+        const appointmentDate = new Date(pending.date);
+        
+        // Ripristiniamo lo stato della UI in modo che l'utente veda cosa sta succedendo
+        setBookingData({
+          service: pending.service,
+          operator: pending.operator,
+          date: appointmentDate,
+          time: pending.time
+        });
+        setStep(4);
+
+        const autoSubmit = async () => {
+          setIsSubmitting(true);
+          toast.info("Completamento della prenotazione in corso...");
+
+          try {
+            const [hours, minutes] = pending.time.split(':');
+            const finalAppointmentDate = new Date(appointmentDate);
+            finalAppointmentDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+            const result = await createAppointment({
+              serviceId: pending.service.id,
+              operatorId: pending.operator.id,
+              appointmentDate: finalAppointmentDate,
+            });
+
+            if (result.success) {
+              setStep(5);
+              toast.success("Prenotazione completata con successo!");
+            } else {
+              toast.error(result.error || "Errore durante la prenotazione");
+            }
+          } catch (error) {
+            toast.error("Si è verificato un errore imprevisto");
+          } finally {
+            setIsSubmitting(false);
+          }
+        };
+
+        // Piccolo delay per garantire che le query sui servizi/operatori/slot si siano caricate o mostrino lo stato corretto
+        const timer = setTimeout(() => {
+          autoSubmit();
+        }, 500);
+
+        return () => clearTimeout(timer);
+      }
+    } catch (e) {
+      console.error("Failed to parse pending booking", e);
+    }
+  }, [isLoaded, isSignedIn, user]);
 
 
   // Calendar logic
@@ -169,6 +219,25 @@ export default function BookAppointmentPage() {
   };
 
   const handleSelectTime = async (time: string) => {
+    if (!isSignedIn) {
+      if (!bookingData.service || !bookingData.operator || !bookingData.date) {
+        toast.error("Dati di prenotazione incompleti");
+        return;
+      }
+      
+      // Salva la prenotazione pendente nel localStorage
+      localStorage.setItem("pendingBooking", JSON.stringify({
+        service: bookingData.service,
+        operator: bookingData.operator,
+        date: bookingData.date ? bookingData.date.toISOString() : null,
+        time: time
+      }));
+      
+      toast.info("Reindirizzamento all'accesso per completare la prenotazione...");
+      router.push(`/sign-in?redirect_url=${encodeURIComponent(window.location.href)}`);
+      return;
+    }
+
     setIsSubmitting(true);
     const finalBookingData = { ...bookingData, time };
     setBookingData(finalBookingData);
@@ -221,9 +290,9 @@ export default function BookAppointmentPage() {
           <Link href="/" className="site-brand text-brand">FULLART</Link>
           
           <div className="hidden lg:flex items-center gap-8 text-sm font-medium">
-            <Link href="/#servizi" className="hover:text-brand transition-colors">Servizi</Link>
             <Link href="/wellness" className="hover:text-brand transition-colors">Wellness</Link>
             <Link href="/products" className="hover:text-brand transition-colors">Products</Link>
+            <Link href="/appointments" className="hover:text-brand transition-colors">I miei appuntamenti</Link>
             {canAccessDashboard && (
               <Link href="/admin" className="hover:text-brand transition-colors font-bold text-brand">Dashboard</Link>
             )}
@@ -270,38 +339,7 @@ export default function BookAppointmentPage() {
 
       <main id="main-content" className="page-hero pt-24 pb-20">
         <div className="site-shell max-w-4xl">
-          {/* View Toggle */}
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex justify-center mb-12"
-          >
-            <div className="glass-effect p-1.5 rounded-2xl flex gap-1 soft-shadow border border-brand/10">
-              <button 
-                onClick={() => setView("booking")}
-                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${view === "booking" ? "bg-brand text-white shadow-lg shadow-brand/20" : "hover:bg-brand/5 text-muted"}`}
-              >
-                Prenota
-              </button>
-              <button 
-                onClick={() => setView("appointments")}
-                className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${view === "appointments" ? "bg-brand text-white shadow-lg shadow-brand/20" : "hover:bg-brand/5 text-muted"}`}
-              >
-                Le mie prenotazioni
-              </button>
-            </div>
-          </motion.div>
-
-          <AnimatePresence mode="wait">
-            {view === "booking" ? (
-              <motion.div
-                key="booking-view"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.4 }}
-              >
-                {/* Header Section */}
+          {/* Header Section */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -610,91 +648,69 @@ export default function BookAppointmentPage() {
                         <p className="text-muted mb-10 text-lg">
                           Abbiamo ricevuto la tua richiesta. Riceverai un'email di conferma a breve.
                         </p>
+                        {/* Premium Sleek Summary Card */}
+                        <div className="max-w-md mx-auto bg-card border border-brand/10 rounded-[2.5rem] overflow-hidden soft-shadow text-left p-8 md:p-10 mb-10 relative">
+                          {/* Top accent line */}
+                          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-brand/20 via-brand to-brand/20" />
+                          
+                          <h3 className="text-xl font-bold tracking-tight text-foreground mb-8 flex items-center gap-2.5">
+                            <Sparkles className="w-5 h-5 text-brand" />
+                            Riepilogo Prenotazione
+                          </h3>
 
-                        {/* Premium Digital Boarding Pass / Ticket */}
-                        <div className="max-w-md mx-auto bg-card border border-brand/10 rounded-[2.5rem] overflow-hidden soft-shadow text-left relative flex flex-col mb-10">
-                          {/* Ticket Header */}
-                          <div className="bg-brand text-white p-6 relative flex justify-between items-center overflow-hidden">
-                            {/* Decorative background gradients */}
-                            <div className="absolute inset-0 bg-gradient-to-r from-brand to-brand-hover" />
-                            <div className="absolute -top-10 -right-10 w-24 h-24 bg-white/5 rounded-full blur-xl" />
-                            
-                            <div className="relative z-10">
-                              <span className="text-[9px] font-black uppercase tracking-[0.25em] text-white/70">FullArt Barber Spa</span>
-                              <h4 className="text-xl font-bold tracking-tight mt-0.5">Booking Pass</h4>
-                            </div>
-                            <div className="relative z-10 bg-white/15 px-3 py-1.5 rounded-xl border border-white/10 text-center">
-                              <span className="block text-[8px] font-bold text-white/80 uppercase tracking-widest">Prezzo</span>
-                              <span className="font-serif italic text-sm font-bold">{bookingData.service?.price / 100}€</span>
-                            </div>
-                          </div>
-
-                          {/* Ticket Main Details */}
-                          <div className="p-6 md:p-8 bg-card flex flex-col gap-6 relative">
-                            {/* Client & Operator info */}
-                            <div className="grid grid-cols-2 gap-4">
-                              <div>
-                                <span className="text-[9px] font-bold text-muted uppercase tracking-wider block">Servizio</span>
-                                <span className="font-bold text-foreground text-sm sm:text-base leading-tight mt-1 block">{bookingData.service?.name}</span>
-                                <span className="text-[10px] text-muted-foreground mt-0.5 block">{bookingData.service?.duration} min</span>
+                          <div className="space-y-6">
+                            {/* Service */}
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 bg-brand/10 text-brand rounded-xl flex items-center justify-center shrink-0">
+                                <Scissors className="w-5 h-5" />
                               </div>
                               <div>
-                                <span className="text-[9px] font-bold text-muted uppercase tracking-wider block">Barber Designer</span>
-                                <span className="font-bold text-foreground text-sm sm:text-base leading-tight mt-1 block">{bookingData.operator?.name}</span>
-                                <span className="text-[10px] text-muted-foreground mt-0.5 block">Poltrona 0{Math.floor(Math.random() * 3) + 1}</span>
+                                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Servizio</span>
+                                <span className="font-bold text-foreground text-base mt-0.5 block">{bookingData.service?.name}</span>
+                                <span className="text-xs text-muted-foreground mt-0.5 block">{bookingData.service?.duration} min</span>
                               </div>
                             </div>
 
-                            {/* Date and Time info */}
-                            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-brand/5">
+                            {/* Barber */}
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 bg-brand/10 text-brand rounded-xl flex items-center justify-center shrink-0">
+                                <User className="w-5 h-5" />
+                              </div>
                               <div>
-                                <span className="text-[9px] font-bold text-muted uppercase tracking-wider block">Data</span>
-                                <span className="font-bold text-foreground text-sm sm:text-base leading-tight mt-1 block">
-                                  {bookingData.date?.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Barbiere</span>
+                                <span className="font-bold text-foreground text-base mt-0.5 block">{bookingData.operator?.name}</span>
+                              </div>
+                            </div>
+
+                            {/* Date & Time */}
+                            <div className="flex items-start gap-4">
+                              <div className="w-10 h-10 bg-brand/10 text-brand rounded-xl flex items-center justify-center shrink-0">
+                                <CalendarIcon className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Data e Ora</span>
+                                <span className="font-bold text-foreground text-base mt-0.5 block">
+                                  {bookingData.date?.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
                                 </span>
-                              </div>
-                              <div>
-                                <span className="text-[9px] font-bold text-muted uppercase tracking-wider block">Orario</span>
-                                <span className="font-black text-brand text-base sm:text-lg tracking-tight mt-0.5 block">
+                                <span className="font-black text-brand text-sm mt-0.5 block">
                                   ore {bookingData.time}
                                 </span>
                               </div>
                             </div>
-                          </div>
 
-                          {/* Perforated Divider Section */}
-                          <div className="relative h-6 bg-card flex items-center justify-between pointer-events-none">
-                            {/* Circular notches */}
-                            <div className="w-4 h-6 rounded-r-full bg-background border-r border-y border-brand/10 -ml-0.5" />
-                            <div className="flex-1 border-t-2 border-dashed border-brand/15 mx-2" />
-                            <div className="w-4 h-6 rounded-l-full bg-background border-l border-y border-brand/10 -mr-0.5" />
-                          </div>
-
-                          {/* Ticket Bottom Barcode Section */}
-                          <div className="p-6 bg-muted/20 border-t border-brand/5 flex flex-col items-center justify-center gap-4 text-center">
-                            {/* Simulated Barcode */}
-                            <div className="flex flex-col items-center justify-center gap-1.5 w-full max-w-[200px] mx-auto select-none opacity-85">
-                              <div className="h-10 w-full flex items-stretch gap-[1.5px] bg-foreground/5 p-1 rounded-sm">
-                                {[...Array(38)].map((_, i) => {
-                                  const widths = ["w-[1px]", "w-[2px]", "w-[3px]", "w-[1px]"];
-                                  const widthClass = widths[i % widths.length];
-                                  const isDark = (i * 7 + 13) % 11 > 3;
-                                  return (
-                                    <div 
-                                      key={i} 
-                                      className={`h-full ${widthClass} ${isDark ? 'bg-foreground' : 'bg-transparent'} flex-1`} 
-                                    />
-                                  );
-                                })}
+                            {/* Price */}
+                            <div className="flex items-start gap-4 pt-4 border-t border-brand/10">
+                              <div className="w-10 h-10 bg-brand/10 text-brand rounded-xl flex items-center justify-center shrink-0">
+                                <span className="font-serif italic font-black text-base">€</span>
                               </div>
-                              <span className="text-[8px] font-mono text-muted tracking-[0.4em] uppercase">
-                                FA-{bookingData.time?.replace(':', '')}-{bookingData.date?.getDate()}0{bookingData.date ? bookingData.date.getMonth() + 1 : 1}
-                              </span>
+                              <div>
+                                <span className="text-[10px] font-bold text-muted uppercase tracking-wider block">Importo</span>
+                                <span className="text-2xl font-black text-brand tracking-tight mt-0.5 block">
+                                  {bookingData.service?.price / 100}€
+                                </span>
+                                <span className="text-[10px] text-muted-foreground mt-0.5 block">Pagamento in salone</span>
+                              </div>
                             </div>
-
-                            <p className="text-[9px] font-semibold text-muted uppercase tracking-widest leading-relaxed max-w-[240px]">
-                              Mostra questo pass all'accoglienza in salone.
-                            </p>
                           </div>
                         </div>
 
@@ -712,93 +728,9 @@ export default function BookAppointmentPage() {
                     )}
                   </AnimatePresence>
                 </div>
-              </motion.div>
-            ) : (
-              <motion.div
-                key="appointments-view"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                transition={{ duration: 0.4 }}
-                className="max-w-3xl mx-auto"
-              >
-                <div className="text-center mb-12">
-                  <div className="inline-flex items-center gap-2 bg-brand/10 text-brand px-3 py-1 rounded-full text-xs font-bold tracking-widest uppercase mb-6">
-                    <User className="w-3 h-3" />
-                    I tuoi appuntamenti
-                  </div>
-                  <h1 className="hero-title md:text-6xl font-bold tracking-tighter mb-4">
-                    Gestisci i tuoi <span className="text-brand italic font-serif">rituali</span>.
-                  </h1>
-                </div>
-
-                {isLoaded && !isSignedIn && (
-                  <div className="glass-effect p-12 rounded-[3rem] text-center soft-shadow border border-brand/10">
-                    <div className="size-20 bg-brand/10 text-brand rounded-full flex items-center justify-center mx-auto mb-6">
-                      <User className="size-10" />
-                    </div>
-                    <h3 className="text-2xl font-bold mb-4">Accesso richiesto</h3>
-                    <p className="text-muted mb-8 max-w-sm mx-auto">Accedi per visualizzare e gestire le tue prenotazioni passate e future.</p>
-                    <SignInButton mode="redirect">
-                      <Button className="bg-brand hover:bg-brand-hover text-white rounded-2xl h-14 px-12 font-bold shadow-lg shadow-brand/20">
-                        ACCEDI ORA
-                      </Button>
-                    </SignInButton>
-                  </div>
-                )}
-
-                {isLoaded && isSignedIn && (
-                  <div className="grid gap-6">
-                    {dbAppointments.map((apt) => (
-                      <div key={apt.id} className="glass-effect p-8 rounded-[2.5rem] soft-shadow border border-transparent hover:border-brand/10 transition-all group overflow-hidden relative">
-                        <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-                          <CheckCircle2 className="size-20 text-brand" />
-                        </div>
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-                          <div className="flex items-center gap-6">
-                            <div className="size-16 bg-brand/10 text-brand rounded-2xl flex items-center justify-center font-black text-xl flex-col">
-                              <span className="text-xs uppercase opacity-50">{new Date(apt.appointmentDate).toLocaleString('it-IT', { month: 'short' })}</span>
-                              {new Date(apt.appointmentDate).getDate()}
-                            </div>
-                            <div>
-                              <h3 className="text-2xl font-bold mb-1">{apt.service?.name}</h3>
-                              <p className="text-muted font-medium flex items-center gap-2 text-sm uppercase tracking-wider">
-                                <User className="size-3.5" /> {apt.operator?.name} • <Clock className="size-3.5" /> {new Date(apt.appointmentDate).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-widest ${apt.status === "confirmed" ? "bg-emerald-500/10 text-emerald-500" : apt.status === "pending" ? "bg-amber-500/10 text-amber-500" : "bg-red-500/10 text-red-500"}`}>
-                              {apt.status === "confirmed" ? "Confermato" : apt.status === "pending" ? "In Attesa" : apt.status}
-                            </div>
-                            <Button variant="ghost" className="size-10 p-0 rounded-xl hover:bg-red-500/10 hover:text-red-500 transition-colors">
-                              <ArrowLeft className="rotate-45 size-5" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {dbAppointments.length === 0 && (
-
-                      <div className="glass-effect p-16 rounded-[3rem] text-center soft-shadow border border-brand/10">
-                        <p className="text-muted italic">Non hai ancora prenotazioni attive.</p>
-                        <Button 
-                          onClick={() => setView("booking")} 
-                          variant="link" 
-                          className="text-brand font-bold mt-4 inline-flex items-center gap-1"
-                        >
-                          Prenota il tuo primo rituale <ArrowRight className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           {/* Helper Section */}
-          {view === "booking" && step < 5 && (
+          {step < 5 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

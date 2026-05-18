@@ -14,8 +14,8 @@ export function MobileTabBar() {
 
   if (pathname?.startsWith("/admin")) return null;
 
-  const isAppointmentsView = pathname === "/book-appointment" && searchParams.get("view") === "appointments";
-  const isBookingView = pathname === "/book-appointment" && searchParams.get("view") !== "appointments";
+  const isAppointmentsView = pathname === "/appointments";
+  const isBookingView = pathname === "/book-appointment";
 
   const tabs = [
     {
@@ -46,7 +46,7 @@ export function MobileTabBar() {
     {
       label: "Miei",
       icon: User,
-      href: "/book-appointment?view=appointments",
+      href: "/appointments",
       isActive: isAppointmentsView,
       isProfile: true,
     },

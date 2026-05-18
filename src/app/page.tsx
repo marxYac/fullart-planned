@@ -40,10 +40,9 @@ export default function Home() {
           <span className="site-brand text-brand">FULLART</span>
           
           <div className="hidden lg:flex items-center gap-8 text-sm font-medium">
-            <Link href="#servizi" className="hover:text-brand transition-colors">Servizi</Link>
-            <Link href="#manifesto" className="hover:text-brand transition-colors">Manifesto</Link>
             <Link href="/wellness" className="hover:text-brand transition-colors">Wellness</Link>
             <Link href="/products" className="hover:text-brand transition-colors">Products</Link>
+            <Link href="/appointments" className="hover:text-brand transition-colors">I miei appuntamenti</Link>
             {canAccessDashboard && (
               <Link href="/admin" className="hover:text-brand transition-colors font-bold text-brand">Dashboard</Link>
             )}
